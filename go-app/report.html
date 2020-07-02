@@ -1,0 +1,142 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+#analysisResult {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#analysisResult td, #analysisResult th {
+  border: 1px solid #ddd;
+  padding: 8px;
+  color: grey;
+}
+
+
+#analysisResult tr:hover {background-color: #ddd;}
+
+#analysisResult th {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  text-align: left;
+  background-color: white;
+  color: grey;
+}
+
+.header {
+  overflow: hidden;
+  background-color: #4285F4;
+  padding: 20px 10px;
+}
+
+
+.header a.logo{
+  font-size: 25px;
+  font-weight: bold;
+  float: left;
+  color: white;
+  text-align: center;
+  padding: 12px;
+  text-decoration: none; 
+  line-height: 25px;
+  border-radius: 4px;
+}
+.header-right a.settings{
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+  text-align: center;
+  padding: 12px;
+  text-decoration: none; 
+  line-height: 25px;
+  border-radius: 4px;
+}
+
+
+
+.header-right {
+ 
+  margin-left: 95%;
+}
+.settings-content a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+.settings-content {
+  display: none;
+  position: absolute;
+  background-color: #f1f1f1;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+
+  
+}
+.header-right:hover .settings-content {display: block;}
+
+.settings-content a:hover {background-color: #ddd;}
+
+</style>
+</head>
+  <body>
+    <div class="header">
+      <a  class="logo">Log Parser</a>
+      <div class="header-right">
+       <a class="settings">Settings</a>
+       <div class = "settings-content">
+        <a href= "analyzeLog" >Analyze Log</a>
+        <a href="UploadConfig" >Upload Config</a>
+        <a href="deleteConfig">Delete Config</a>
+        <a href="editConfig">EditConfig</a>
+       </div>
+      </div>
+    </div>
+
+        <div>
+            <label style="font-size:25px">Raw Logs</label>
+            <br>
+            <a style = "color:fuchsia" href="report/{{.FileName}}">{{.FileName}}</a>
+            <br>
+            <br>
+            <label style="font-size:25px">Specific Process  Logs</label>
+            <br>
+            {{ range $pname, $pvalue := .SpecificProcess }}
+                <a style = "color:fuchsia" href="report/{{$pname}}">{{$pname}}</a>
+                <br>
+                <br>
+            {{end}}
+        </div>
+
+        <table id="analysisResult">
+            <tr>
+                {{ range $field := .Header }}
+                    <th>{{$field}}</th>
+                {{end}}
+            </tr>
+                {{range $issue := .OrderedIssues}}
+                  <tr>
+                      {{$issue_details := index $.Issues $issue}}
+                      {{range $field := $.Header}}
+                           {{ if eq $field "Issue"}}
+                              <td>{{$issue}}</td> 
+                           {{else}}
+                                {{if eq $field "Details"}}
+                                    <td><a style = "color:fuchsia"href="report/Details/{{ $issue }}">Details</a></td>
+                                {{else}}
+                                    {{$field_detail:= index $issue_details $field}}
+                                    {{if eq $field_detail ""}}
+                                        {{$field_detail = "N/A"}}
+                                    {{end}}
+                                    <td>{{$field_detail}} </td>
+                                {{end}}
+                           {{end}}
+                      {{end}}
+                  </tr>
+                {{end}}  
+       </table>     
+  </body>
+</html>
