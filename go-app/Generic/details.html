@@ -1,0 +1,129 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+#analysisResult {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#analysisResult td, #analysisResult th {
+  border: 1px solid #ddd;
+  padding: 8px;
+  color: grey;
+}
+
+
+#analysisResult tr:hover {background-color: #ddd;}
+
+#analysisResult th {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  text-align: left;
+  background-color: white;
+  color: grey;
+}
+</style>
+</head>
+  <body>
+    
+
+
+      {{$type_issue := detailType}}
+      {{if eq $type_issue "Log"}}
+         <div>
+                <textarea name="fContent" rows="38" cols="175">{{.}} </textarea>
+          </div>
+      {{else if eq $type_issue "Group"}}
+        <table id="analysisResult">
+            <tr>
+                {{range $index,$field := $.Group_names}}
+                    {{ if gt $index 0}}
+                        {{ if eq $index 2}}
+                            <th>Number</th>
+                        {{end}}
+                        <th>{{$field}}</th>
+                    {{end}}
+                {{end}}
+            </tr>
+            {{range $issueType ,$detail := $.Group_content}}
+                {{range $index,$values := $detail}}
+                <tr>
+                    {{$count_details := index $.Group_count $issueType}}
+                    {{$length := len $detail}}
+                    {{ if gt $length 1}}
+                        {{ if eq $index 0}}
+                            {{$length := len $detail}}  
+                            <th rowspan= {{$length}} >{{$issueType}}</th>
+                        {{end}}
+                    {{else}}
+                        <th  >{{$issueType}}</th>
+                    {{end}}
+                    <th>{{index $count_details $index}}</th>
+                    {{range $field_value := $values}}
+                     <th>{{$field_value}}</th>
+                    {{end}}
+
+                </tr>
+                {{end}}
+                
+            {{end}}    
+       </table> 
+       {{else}} 
+         <!--   <script>
+                $('a[href^="#"]').on('click', function(event) {
+
+                var target = $(this.getAttribute('href'));
+
+                if( target.length ) {
+                 event.preventDefault();
+                    $('html, body').stop().animate({
+                    scrollTop: target.offset().top
+                }, 5000);
+             }
+
+           });
+        </script>
+        <a href="#bottom" id="top">Click to scroll down</a>-->
+
+        <div id="star">&star;</div>
+            {{$after_lines := ""}}
+            {{$countLine :=0}}
+            {{range $index ,$line := .}}
+                {{if hightlightIssue $line}}
+                 <details>
+                    <summary>See more details</summary>
+                      <div>
+                        <textarea name="fContent" rows= {{$countLine}} cols="183">{{$after_lines}} </textarea>
+                      </div>
+                 </details>
+                 <p style="color:#ff00ff">{{$line}}</p>
+                 {{$countLine = 0}}
+                   {{$after_lines =""}}
+                 {{else}}
+                   {{$after_lines = addLine $after_lines $line}}
+                   {{$countLine = add $countLine 1}}
+                   <!-- {{if lt $countLine 5}}
+                       <p >{{$line}}</p>
+                    {{else}}
+                       {{if eq $countLine 5}}
+                         <p >......................................</p>
+                       {{end}}
+                    {{end}}
+                   -->
+                {{end}}
+            {{end}}
+            <details>
+                <summary>See more details</summary>
+                  <div>
+                    <textarea name="fContent" rows={{$countLine}} cols="183">{{$after_lines}} </textarea>
+                  </div>
+             </details>
+         <!-- <a href="#top" id="bottom">Click to scroll up</a>-->
+       {{end}}   
+  </body>
+</html>
+
+
