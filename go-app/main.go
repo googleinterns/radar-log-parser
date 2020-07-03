@@ -94,6 +94,7 @@ var (
 )
 var (
 	project_id           string   = "log-parser-278319"
+	region_id            string   = "ue"
 	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com"}
 ) //totoo put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
@@ -167,7 +168,6 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		homeTempl.Execute(w, cloudConfigs)
 	case "editConfig":
 		action := r.FormValue("action")
 		if action == "Display" {
@@ -200,10 +200,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 }
 func deleteConfig(w http.ResponseWriter, r *http.Request) error {
 	r.ParseMultipartForm(10 << 20)
-	//selectedBucket := r.FormValue("selectedBucket")
-	//selectedBucket := "my-android-bucket"
 	/*****************************/
-	res, err := http.Get("https://log-parser-278319.ue.r.appspot.com/deleteConfig")
+
+	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com" + r.URL.Path)
 	if err != nil {
 		return err
 	}
@@ -246,8 +245,9 @@ func deleteConfig(w http.ResponseWriter, r *http.Request) error {
 }
 func displayConfig(w http.ResponseWriter, r *http.Request) (*CloudConfigDetails, error) {
 	r.ParseMultipartForm(10 << 20)
+	file := r.FormValue("selectedFile")
 	/*****************************/
-	res, err := http.Get("https://log-parser-278319.ue.r.appspot.com/editConfig")
+	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -259,13 +259,13 @@ func displayConfig(w http.ResponseWriter, r *http.Request) (*CloudConfigDetails,
 	if err != nil {
 		return nil, err
 	}
-	//selectedBucket, found := doc.Find("option#file").Parent().Attr("label")
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
+	selector := "option[value=" + file + "]"
+	selectedBucket, found := doc.Find(selector).Parent().Attr("label")
 	if !found {
 		return nil, err
 	}
 	/*********************************/
-	file := r.FormValue("selectedFile")
+
 	content, err := downloadFile(w, selectedBucket, file)
 	if err != nil {
 		//http.Error(w, "Sorry, something went wrong", http.StatusInternalServerError)
@@ -284,7 +284,7 @@ func editConfig(w http.ResponseWriter, r *http.Request) (bool, error) {
 	//selectedBucket := "my-android-bucket"
 	file := r.FormValue("selectedFile")
 	/*****************************/
-	res, err := http.Get("https://log-parser-278319.ue.r.appspot.com/editConfig")
+	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
 	if err != nil {
 		return false, err
 	}
@@ -634,7 +634,7 @@ func uploadLogFile(w http.ResponseWriter, r *http.Request) (string, *string, str
 	r.ParseMultipartForm(10 << 20)
 	cfg_file := r.FormValue("selectedFile")
 	/*****************************/
-	res, err := http.Get("https://log-parser-278319.ue.r.appspot.com/analyzeLog")
+	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
 	if err != nil {
 		return "", nil, cfg_file, "", err
 	}
