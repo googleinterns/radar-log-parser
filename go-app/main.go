@@ -134,9 +134,8 @@ func fillConfigMap() {
 	}
 }
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-
+	page := r.URL.Path[len("/"):]
 	if r.Method != http.MethodPost {
-		page := r.URL.Path[len("/"):]
 		if len(page) > 5 {
 			if strings.Contains(page, "UploadConfig") {
 				bucketList := make([]string, 0, len(cloudConfigs))
@@ -162,9 +161,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	switch file := r.URL.Path[len("/"):]; file {
+	switch page {
 	case "UploadConfig":
-		_, err := uploadConfigFile(r)
+		err := uploadConfigFile(r)
 		if err != nil {
 			return
 		}
@@ -177,15 +176,12 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			edit_configTempl.Execute(w, configs)
 		} else {
-			_, err := editConfig(w, r)
+			err := editConfig(w, r)
 			if err != nil {
 				return
 			}
 			homeTempl.Execute(w, cloudConfigs)
 		}
-
-	case "analyzeLog":
-		analyseLog(w, r)
 	case "deleteConfig":
 		err := deleteConfig(w, r)
 		if err != nil {
@@ -200,8 +196,6 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 }
 func deleteConfig(w http.ResponseWriter, r *http.Request) error {
 	r.ParseMultipartForm(10 << 20)
-	/*****************************/
-
 	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com" + r.URL.Path)
 	if err != nil {
 		return err
@@ -218,25 +212,23 @@ func deleteConfig(w http.ResponseWriter, r *http.Request) error {
 	if !found {
 		return err
 	}
-	/*********************************/
-	file := r.FormValue("selectedFile")
+	cfgfile := r.FormValue("selectedFile")
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
-
 	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
-
-	o := client.Bucket(selectedBucket).Object(file)
-	if err := o.Delete(ctx); err != nil {
-		return fmt.Errorf("Object(%q).Delete: %v", file, err)
+	o := client.Bucket(selectedBucket).Object(cfgfile)
+	err = o.Delete(ctx)
+	if err != nil {
+		return fmt.Errorf("Object(%q).Delete: %v", cfgfile, err)
 	}
 	//update cloud config
 	for i, _ := range cloudConfigs[selectedBucket] {
-		if cloudConfigs[selectedBucket][i] == file {
+		if cloudConfigs[selectedBucket][i] == cfgfile {
 			cloudConfigs[selectedBucket][i] = cloudConfigs[selectedBucket][len(cloudConfigs[selectedBucket])-1]
 			cloudConfigs[selectedBucket] = cloudConfigs[selectedBucket][:len(cloudConfigs[selectedBucket])-1]
 		}
@@ -245,8 +237,7 @@ func deleteConfig(w http.ResponseWriter, r *http.Request) error {
 }
 func displayConfig(w http.ResponseWriter, r *http.Request) (*CloudConfigDetails, error) {
 	r.ParseMultipartForm(10 << 20)
-	file := r.FormValue("selectedFile")
-	/*****************************/
+	cfgfile := r.FormValue("selectedFile")
 	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
 	if err != nil {
 		return nil, err
@@ -259,14 +250,12 @@ func displayConfig(w http.ResponseWriter, r *http.Request) (*CloudConfigDetails,
 	if err != nil {
 		return nil, err
 	}
-	selector := "option[value=" + file + "]"
+	selector := "option[value=" + cfgfile + "]"
 	selectedBucket, found := doc.Find(selector).Parent().Attr("label")
 	if !found {
 		return nil, err
 	}
-	/*********************************/
-
-	content, err := downloadFile(w, selectedBucket, file)
+	content, err := downloadFile(w, selectedBucket, cfgfile)
 	if err != nil {
 		//http.Error(w, "Sorry, something went wrong", http.StatusInternalServerError)
 		return nil, err
@@ -278,60 +267,53 @@ func displayConfig(w http.ResponseWriter, r *http.Request) (*CloudConfigDetails,
 	return &configs, err
 
 }
-func editConfig(w http.ResponseWriter, r *http.Request) (bool, error) {
+func editConfig(w http.ResponseWriter, r *http.Request) error {
 	r.ParseMultipartForm(10 << 20)
-	//selectedBucket := r.FormValue("selectedBucket")
-	//selectedBucket := "my-android-bucket"
-	file := r.FormValue("selectedFile")
-	/*****************************/
+	cfgfile := r.FormValue("selectedFile")
 	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
 	if err != nil {
-		return false, err
+		return err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return false, err
+		return err
 	}
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		return false, err
+		return err
 	}
 	selectedBucket, found := doc.Find("optgroup").Attr("label")
 	if !found {
-		return false, err
+		return err
 	}
-	/*********************************/
 
 	//delete current file before
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return false, fmt.Errorf("storage.NewClient: %v", err)
+		return fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
-	o := client.Bucket(selectedBucket).Object(file)
-	if err := o.Delete(ctx); err != nil {
-		return false, fmt.Errorf("Object(%q).Delete: %v", file, err)
+	o := client.Bucket(selectedBucket).Object(cfgfile)
+	err = o.Delete(ctx)
+	if err != nil {
+		return fmt.Errorf("Object(%q).Delete: %v", cfgfile, err)
 	}
-	//http.Error(w, "Sorry, something went wrong", http.StatusInternalServerError)
 	//Replace with new content
-
 	newContent := r.FormValue("configContent")
-
-	wc := client.Bucket(selectedBucket).Object(file).NewWriter(ctx)
-	if _, err = io.WriteString(wc, newContent); err != nil { //will be used for update
-		return false, err
+	wc := client.Bucket(selectedBucket).Object(cfgfile).NewWriter(ctx)
+	_, err = io.WriteString(wc, newContent)
+	if err != nil {
+		return err
 	}
 	if err := wc.Close(); err != nil {
-		return false, err
+		return err
 	}
-
-	return true, nil
-
+	return nil
 }
 
 func analyseLog(w http.ResponseWriter, r *http.Request) {
@@ -596,20 +578,20 @@ func extractConfig(cfgName string, bucket string) (*config, error) {
 	return &cfgFile, nil
 }
 
-func uploadConfigFile(r *http.Request) (bool, error) {
+func uploadConfigFile(r *http.Request) error {
 	r.ParseMultipartForm(10 << 20)
 	selectedBucket := r.FormValue("selectedFile")
 	file, handler, err := r.FormFile("myFile")
 	if err != nil {
-		return false, err
+		return err
 	}
 	if filepath.Ext(handler.Filename) != ".yml" && filepath.Ext(handler.Filename) != ".yaml" {
-		return false, errors.New("Invalid Format")
+		return errors.New("Invalid Format")
 	}
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return false, nil
+		return nil
 	}
 
 	defer client.Close()
@@ -621,19 +603,18 @@ func uploadConfigFile(r *http.Request) (bool, error) {
 		return false, err
 	}*/
 	if _, err = io.Copy(wc, file); err != nil {
-		return false, err
+		return err
 	}
 	if err := wc.Close(); err != nil {
-		return false, err
+		return err
 	}
 	//update config file
 	cloudConfigs[selectedBucket] = append(cloudConfigs[selectedBucket], handler.Filename)
-	return true, nil
+	return nil
 }
 func uploadLogFile(w http.ResponseWriter, r *http.Request) (string, *string, string, string, error) {
 	r.ParseMultipartForm(10 << 20)
 	cfg_file := r.FormValue("selectedFile")
-	/*****************************/
 	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
 	if err != nil {
 		return "", nil, cfg_file, "", err
@@ -650,7 +631,6 @@ func uploadLogFile(w http.ResponseWriter, r *http.Request) (string, *string, str
 	if !found {
 		return "", nil, cfg_file, "", err
 	}
-	/*********************************/
 	file, handler, err := r.FormFile("myFile")
 	if err != nil {
 		return "", nil, cfg_file, selectedBucket, err
@@ -686,13 +666,12 @@ func uploadLogFile(w http.ResponseWriter, r *http.Request) (string, *string, str
 }
 
 func logReport(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("report", r.URL.Path)
 	switch file := r.URL.Path[len("/report/"):]; file {
 	case analysis_details.FileName:
 		template.Must(template.New("details.html").Funcs(template.FuncMap{"add": func(x, y int) int {
 			return 0
 		}, "addLine": func(x, y string) string {
-			return ""
+			return x + "\n" + y
 		}, "hightlightIssue": func(line string) bool {
 			return true
 		}, "detailType": func() string { return "Log" }}).ParseFiles("details.html")).Execute(w, analysis_details.RawLog)
@@ -704,7 +683,7 @@ func logReport(w http.ResponseWriter, r *http.Request) {
 				template.Must(template.New("details.html").Funcs(template.FuncMap{"add": func(x, y int) int {
 					return 0
 				}, "addLine": func(x, y string) string {
-					return ""
+					return x + "\n" + y
 				}, "hightlightIssue": func(line string) bool {
 
 					return true
@@ -723,7 +702,7 @@ func logReport(w http.ResponseWriter, r *http.Request) {
 			template.Must(template.New("details.html").Funcs(template.FuncMap{"add": func(x, y int) int {
 				return 0
 			}, "addLine": func(x, y string) string {
-				return ""
+				return x + "\n" + y
 			}, "hightlightIssue": func(line string) bool {
 
 				return true
