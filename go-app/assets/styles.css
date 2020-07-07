@@ -1,71 +1,84 @@
-html {
-    box-sizing: border-box;
-  }
-  :root {
-    --light-green: #00ff00;
-    --dark-green: #003b00;
-    --dark-grey: #777;
-    --light-grey: #dadce0;
-    --fushia:#ff00ff
-  }
-  
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
-  }
-  
-  header {
-    width: 100%;
-    height: 10%;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
-    background-color: var(--fushia);
-    padding: 5px 10px;
-    align-items: center;
-  }
-  #title {
-    margin-bottom: 15px;
-    margin-left: 10%;
-    font-size: 22px;
-    color: white;
-  }
-  .uploadDiv {
-    margin: 150px 50px 25px 200px;
-  }
-  
-  form {
-    height: calc(100% - 10px);
-  }
+* {box-sizing: border-box;}
 
-  .element {
-    display: inline-flex;
-    align-items: center;
-  }
-  i.fa-paperclip{
-    margin: 10px;
-    cursor: pointer;
-    font-size: 30px;
-  }
-  i:hover {
-    opacity: 0.6;
-  }
-  #uploadInput{
-    display: none;
-  }
-  .fpath_form{
-    display: inline-flex;
-    align-items: center;
-  }
- /* #uploadSubmit {
-    display: inline-block;
-    padding: 0.5em 1em;
-    text-decoration: none;
-    color:#FFF;
-    background: #4285F4;
-    border-bottom: solid 4px #4285F4;
-    border-radius: 3px;
-  }*/
+body { 
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.header {
+  overflow: hidden;
+  background-color: #4285F4;
+  padding: 20px 10px;
+}
+
+
+.header a.logo{
+  font-size: 25px;
+  font-weight: bold;
+  float: left;
+  color: white;
+  text-align: center;
+  padding: 12px;
+  text-decoration: none; 
+  line-height: 25px;
+  border-radius: 4px;
+}
+.header-right a.settings{
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+  text-align: center;
+  padding: 12px;
+  text-decoration: none; 
+  line-height: 25px;
+  border-radius: 4px;
+}
+
+
+
+.header-right {
+ 
+  margin-left: 95%;
+}
+
+.uploadTab {
+	 margin: 10% 10% 2% 15%;
+}
+ input[type=submit] {
+  background-color: #4285F4;
+  border: none;
+  color: white;
+  padding: 10px 32px;
+  text-decoration: none;
+  margin: 4px 2px;
+  cursor: pointer;
+  margin-left:127px;
+}
+#log_file_upload,#config_file_upload,#bucket{
+ font-size: 20px;
+}
+#log_file ,#edit_config{
+	margin-left:50px;
+}
+#config_file {
+ margin-left:20px
+}
+
+.settings-content a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+.settings-content {
+  display: none;
+  position: absolute;
+  background-color: #f1f1f1;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+
   
+}
+.header-right:hover .settings-content {display: block;}
+
+.settings-content a:hover {background-color: #ddd;}
