@@ -29,6 +29,15 @@ input[type=submit] {
   margin-right:500px;
 }
 </style>
+
+<script >
+
+  function submit() {
+    document.getElementById("configForm").submit();
+  }
+
+ </script>
+
 </head>
 <body>
 
@@ -45,21 +54,18 @@ input[type=submit] {
       </div>
 
 <div class = "uploadTab">
-	<form method="POST" enctype="multipart/form-data" >
+	<form method="POST" enctype="multipart/form-data" id = "configForm">
        <label id ="bucket"for="bucket" >Config File:</label>
-       <select name = "selectedFile" id="edit_config" required>
+       <select name = "selectedFile" id="edit_config"  onchange="submit();"required>
         <option value="0">Pick a file:</option>
-        {{range $bucket ,$configs := .Cloud_configurations}}
+        {{range $bucket ,$configs := .}}
             <optgroup name ="selectedBucket"label="{{$bucket}}">
                 {{range $index, $value := $configs}}
-                   <option  value="{{ $value }}">{{ $value }}</option>
+                   <option id = "{{ $value }}" value="{{ $value }}">{{ $value }}</option>
                 {{end}}
             </optgroup>
         {{end}}
       </select>
-       <input type="submit" name="action" value = "Display" >
-       <button name="action" value = "Save">Save</button>
-       <textarea  name ="configContent">{{.Content}}</textarea>
    </form>
 </div>
 </body>

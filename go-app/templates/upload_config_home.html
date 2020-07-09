@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" >
+  <title> Radar-log-parser</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script >
+
+    function createBucket() {
+      //document.getElementsByTagName("form")[0].submit();
+      if (document.getElementsByTagName("select")[0].options[document.getElementsByTagName("select")[0].selectedIndex].value == "Create Bucket"){
+        var nameLabel = document.createElement("label");
+        nameLabel.setAttribute("for", "bucket_name");
+        nameLabel.textContent = 'Bucket Name:';
+        var bucket_name = document.createElement("input");
+        bucket_name.setAttribute("type", "text");
+        bucket_name.setAttribute("name", "bucketName");
+        document.getElementsByTagName("select")[0].parentNode.insertBefore(bucket_name, document.getElementsByTagName("select")[0].nextSibling);
+        document.getElementsByTagName("select")[0].parentNode.insertBefore(nameLabel, document.getElementsByTagName("select")[0].nextSibling);
+        /***delete after and put in style***/
+        document.getElementsByTagName("select")[0].parentNode.insertBefore(document.createElement("br"), document.getElementsByTagName("select")[0].nextSibling);
+        document.getElementsByTagName("select")[0].parentNode.insertBefore(document.createElement("br"), document.getElementsByTagName("select")[0].nextSibling);
+        /*********************************/      
+      }
+      else{
+        //remove bucketname input if the user have been pressed the button before
+      }
+    }
+  
+   </script>
+</head>
+<body>
+
+  <div class="header">
+    <a  class="logo">Log Parser</a>
+    <div class="header-right">
+     <a class="settings">Settings</a>
+     <div class = "settings-content">
+      <a href="UploadConfig" >Upload Config</a>
+      <a href="deleteConfig">Delete Config</a>
+      <a href="editConfig">EditConfig</a>
+     </div>
+    </div>
+  </div>
+<div class = "uploadTab">
+	<form method="POST" enctype="multipart/form-data" >
+       <label id = "config_file_upload"for="config_file" >Config      :</label>
+       <input type="file" id="config_file" name="myFile" accept=".yml,.yaml"required ><br><br> 
+      <label for="bucket" id ="bucket">Bucket:</label>
+       <select name = "selectedFile" id="config_file" onchange="createBucket();" required>
+        <option value="0">Pick a bucket:</option>
+        {{range $index, $value := .}}
+            <option value="{{ $value }}">{{ $value }}</option>
+        {{end}}
+        <option value="Create Bucket"style="color:#4285F4;">Create Bucket</option>
+      </select><br><br>
+
+       <input type="submit" value = "Upload" >
+   </form>
+    
+</div>
+</body>
+</html>

@@ -3,25 +3,22 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"context"
 	"errors"
-	"fmt"
 	"html/template"
-	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"radar-log-parser/go-app/settings"
+	"radar-log-parser/go-app/utilities"
 	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/PuerkitoBio/goquery"
-	"google.golang.org/api/iterator"
 	"gopkg.in/yaml.v2"
 )
 
@@ -74,11 +71,6 @@ type GroupedStruct struct {
 	Group_count   map[string][]int
 }
 
-type CloudConfigDetails struct {
-	Content              string
-	Cloud_configurations map[string][]string
-}
-
 var (
 	analysis_details analysisDetails = analysisDetails{}
 	GroupedIssues                    = make(map[string]GroupedStruct)
@@ -86,11 +78,13 @@ var (
 )
 
 var (
-	homeTempl          = template.Must(template.ParseFiles("home.html"))
-	reportTempl        = template.Must(template.ParseFiles("report.html"))
-	upload_configTempl = template.Must(template.ParseFiles("upload_config_home.html"))
-	edit_configTempl   = template.Must(template.ParseFiles("editConfig.html"))
-	delete_configTempl = template.Must(template.ParseFiles("deleteConfig.html"))
+	homeTempl             = template.Must(template.ParseFiles("templates/home.html"))
+	reportTempl           = template.Must(template.ParseFiles("templates/report.html"))
+	upload_configTempl    = template.Must(template.ParseFiles("templates/upload_config_home.html"))
+	edit_config_homeTempl = template.Must(template.ParseFiles("templates/editConfigHome.html"))
+	edit_configTempl      = template.Must(template.ParseFiles("templates/editConfig.html"))
+
+	delete_configTempl = template.Must(template.ParseFiles("templates/deleteConfig.html"))
 )
 var (
 	project_id           string   = "log-parser-278319"
@@ -98,6 +92,10 @@ var (
 	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com"}
 ) //totoo put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
+var (
+	cfg_edit    string
+	bucket_edit string
+)
 
 func main() {
 	port := os.Getenv("PORT")
@@ -111,7 +109,8 @@ func main() {
 	http.ListenAndServe(":"+port, mux)
 }
 func fillConfigMap() {
-	buckets, err := getBuckets()
+
+	buckets, err := utilities.GetBuckets(project_id)
 	if err != nil {
 		return
 	}
@@ -124,7 +123,7 @@ func fillConfigMap() {
 			}
 		}
 		if allow {
-			cfg, err := getConfigFiles(bucket)
+			cfg, err := utilities.GetConfigFiles(bucket)
 			if err != nil {
 				return
 			}
@@ -146,11 +145,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			} else if strings.Contains(page, "analyzeLog") {
 				homeTempl.Execute(w, cloudConfigs)
 			} else if strings.Contains(page, "editConfig") {
-				configs := CloudConfigDetails{
-					Cloud_configurations: cloudConfigs,
-					Content:              "",
-				}
-				edit_configTempl.Execute(w, configs)
+				edit_config_homeTempl.Execute(w, cloudConfigs)
 			} else if strings.Contains(page, "deleteConfig") {
 				delete_configTempl.Execute(w, cloudConfigs)
 			} else {
@@ -163,157 +158,43 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch page {
 	case "UploadConfig":
-		err := uploadConfigFile(r)
+		configs, err := settings.UploadConfigFile(r, project_id, cloudConfigs)
 		if err != nil {
 			return
 		}
+		cloudConfigs = configs
+
+		template.Must(template.ParseFiles("templates/feedback.html")).Execute(w, nil)
 	case "editConfig":
-		action := r.FormValue("action")
-		if action == "Display" {
-			configs, err := displayConfig(w, r)
+		if r.FormValue("action") == "Save" {
+			err := settings.SaveConfig(r, bucket_edit, cfg_edit)
 			if err != nil {
 				return
 			}
-			edit_configTempl.Execute(w, configs)
+			template.Must(template.ParseFiles("templates/feedback.html")).Execute(w, nil)
 		} else {
-			err := editConfig(w, r)
+			bck, cfg, content, err := settings.DisplayConfig(w, r, project_id, region_id)
+			bucket_edit = bck
+			cfg_edit = cfg
 			if err != nil {
 				return
 			}
-			homeTempl.Execute(w, cloudConfigs)
+			edit_configTempl.Execute(w, content)
 		}
+
 	case "deleteConfig":
-		err := deleteConfig(w, r)
+		configs, err := settings.DeleteConfig(r, project_id, region_id, cloudConfigs)
 		if err != nil {
 			return
 		}
-		delete_configTempl.Execute(w, cloudConfigs)
+		cloudConfigs = configs
+		template.Must(template.ParseFiles("templates/feedback.html")).Execute(w, nil)
+		//delete_configTempl.Execute(w, cloudConfigs)
 	default:
 		analyseLog(w, r)
 
 	}
 
-}
-func deleteConfig(w http.ResponseWriter, r *http.Request) error {
-	r.ParseMultipartForm(10 << 20)
-	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com" + r.URL.Path)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return err
-	}
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return err
-	}
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
-	if !found {
-		return err
-	}
-	cfgfile := r.FormValue("selectedFile")
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return fmt.Errorf("storage.NewClient: %v", err)
-	}
-	defer client.Close()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-	o := client.Bucket(selectedBucket).Object(cfgfile)
-	err = o.Delete(ctx)
-	if err != nil {
-		return fmt.Errorf("Object(%q).Delete: %v", cfgfile, err)
-	}
-	//update cloud config
-	for i, _ := range cloudConfigs[selectedBucket] {
-		if cloudConfigs[selectedBucket][i] == cfgfile {
-			cloudConfigs[selectedBucket][i] = cloudConfigs[selectedBucket][len(cloudConfigs[selectedBucket])-1]
-			cloudConfigs[selectedBucket] = cloudConfigs[selectedBucket][:len(cloudConfigs[selectedBucket])-1]
-		}
-	}
-	return nil
-}
-func displayConfig(w http.ResponseWriter, r *http.Request) (*CloudConfigDetails, error) {
-	r.ParseMultipartForm(10 << 20)
-	cfgfile := r.FormValue("selectedFile")
-	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return nil, err
-	}
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return nil, err
-	}
-	selector := "option[value=" + cfgfile + "]"
-	selectedBucket, found := doc.Find(selector).Parent().Attr("label")
-	if !found {
-		return nil, err
-	}
-	content, err := downloadFile(w, selectedBucket, cfgfile)
-	if err != nil {
-		//http.Error(w, "Sorry, something went wrong", http.StatusInternalServerError)
-		return nil, err
-	}
-	configs := CloudConfigDetails{
-		Cloud_configurations: cloudConfigs,
-		Content:              string(content),
-	}
-	return &configs, err
-
-}
-func editConfig(w http.ResponseWriter, r *http.Request) error {
-	r.ParseMultipartForm(10 << 20)
-	cfgfile := r.FormValue("selectedFile")
-	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return err
-	}
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return err
-	}
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
-	if !found {
-		return err
-	}
-
-	//delete current file before
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return fmt.Errorf("storage.NewClient: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-
-	o := client.Bucket(selectedBucket).Object(cfgfile)
-	err = o.Delete(ctx)
-	if err != nil {
-		return fmt.Errorf("Object(%q).Delete: %v", cfgfile, err)
-	}
-	//Replace with new content
-	newContent := r.FormValue("configContent")
-	wc := client.Bucket(selectedBucket).Object(cfgfile).NewWriter(ctx)
-	_, err = io.WriteString(wc, newContent)
-	if err != nil {
-		return err
-	}
-	if err := wc.Close(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func analyseLog(w http.ResponseWriter, r *http.Request) {
@@ -367,139 +248,9 @@ func analyseLog(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if issue.detailing_mode == "group" {
-			group_rgx, err := regexp.Compile(issue.grouping)
-			if err != nil {
-				continue
-			}
-			group_names := group_rgx.SubexpNames()
-			group_content := make(map[string][][]string)
-			group_count := make(map[string][]int)
-			last_matches := ""
-			for _, log := range strings.Split(issueContent, "\n") {
-				matches := group_rgx.FindStringSubmatch(log)
-				if len(matches) > 2 {
-					last_matches = log
-					if group_content[matches[1]] == nil {
-						group_content[matches[1]] = [][]string{}
-						group_count[matches[1]] = []int{}
-					}
-					exist := false
-					for index, grp_detail := range group_content[matches[1]] {
-						if reflect.DeepEqual(grp_detail, matches[2:]) {
-							group_count[matches[1]][index] += 1
-							exist = true
-							break
-						}
-					}
-					if !exist {
-						group_count[matches[1]] = append(group_count[matches[1]], 1)
-						group_content[matches[1]] = append(group_content[matches[1]], matches[2:])
-					}
-				}
-			}
-
-			issues_count := 0
-			for _, numSlice := range group_count {
-				for _, num := range numSlice {
-					issues_count += num
-				}
-			}
-			analysis_details.Issues[issue_name]["Number"] += strconv.Itoa(issues_count)
-
-			timestampRegex, _ := regexp.Compile(cfgFile.IssuesGeneralFields.Timestamp)
-			match := timestampRegex.FindStringSubmatch(last_matches)
-			if len(match) > 0 {
-				analysis_details.Issues[issue_name]["Timestamp"] = match[0]
-			}
-
-			log_rgx, err := regexp.Compile(cfgFile.IssuesGeneralFields.Log_level)
-			if err != nil {
-				continue
-			}
-			match = log_rgx.FindStringSubmatch(last_matches)
-			if len(match) > 1 {
-				analysis_details.Issues[issue_name]["LogLevel"] = match[1]
-
-			}
-			for field, field_rgx := range cfgFile.IssuesGeneralFields.OtherFields {
-				field_rgx_comp, err := regexp.Compile(field_rgx)
-				if err != nil {
-					continue
-				}
-				match := field_rgx_comp.FindAllString(issueContent, -1)
-				analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
-
-			}
-
-			for field, field_rgx := range issue.additional_fields {
-				field_rgx_comp, err := regexp.Compile(field_rgx)
-				if err != nil {
-					continue
-				}
-				match := field_rgx_comp.FindAllString(issueContent, -1)
-				analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
-				headerMap[field] = true
-			}
-
-			groupedDetails := GroupedStruct{}
-			groupedDetails.Group_content = group_content
-			groupedDetails.Group_count = group_count
-			groupedDetails.Group_names = group_names
-			GroupedIssues[issue_name] = groupedDetails
-
+			groupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name)
 		} else {
-			issue_rgx, err := regexp.Compile(issue.regex)
-			if err != nil {
-				continue
-			}
-			filter_logs := issue_rgx.FindAllString(issueContent, -1)
-			filter_logs_map := make(map[string]bool)
-			for _, filter_log := range filter_logs {
-				filter_logs_map[filter_log] = true
-			}
-			NonGroupedIssues[issue_name] = filter_logs_map
-
-			analysis_details.Issues[issue_name]["Number"] = strconv.Itoa(len(filter_logs))
-			issueContent = strings.Join(filter_logs, "\n")
-
-			if len(filter_logs) > 0 {
-				log_rgx, err := regexp.Compile(cfgFile.IssuesGeneralFields.Log_level)
-				if err != nil {
-					continue
-				}
-				match := log_rgx.FindStringSubmatch(filter_logs[0])
-				if len(match) > 1 {
-					analysis_details.Issues[issue_name]["LogLevel"] = match[1]
-				}
-
-				for field, field_rgx := range cfgFile.IssuesGeneralFields.OtherFields {
-					field_rgx_comp, err := regexp.Compile(field_rgx)
-					if err != nil {
-						continue
-					}
-					match := field_rgx_comp.FindAllString(issueContent, -1)
-					analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
-
-				}
-
-				for field, field_rgx := range issue.additional_fields {
-					field_rgx_comp, err := regexp.Compile(field_rgx)
-					if err != nil {
-						continue
-					}
-					match := field_rgx_comp.FindAllString(issueContent, -1)
-					analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
-					headerMap[field] = true
-				}
-
-				timestampRegex, _ := regexp.Compile(cfgFile.IssuesGeneralFields.Timestamp)
-				match = timestampRegex.FindStringSubmatch(filter_logs[len(filter_logs)-1])
-				if len(match) > 0 {
-					analysis_details.Issues[issue_name]["Timestamp"] = match[0]
-				}
-
-			}
-
+			nongroupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name)
 		}
 	}
 
@@ -528,8 +279,143 @@ func analyseLog(w http.ResponseWriter, r *http.Request) {
 	reportTempl.Execute(w, analysis_details)
 }
 
+func groupIssueDetails(issue issue, cfgFile *config, headerMap map[string]bool, issueContent string, issue_name string) {
+	group_rgx, err := regexp.Compile(issue.grouping)
+	if err != nil {
+		return
+	}
+	group_names := group_rgx.SubexpNames()
+	group_content := make(map[string][][]string)
+	group_count := make(map[string][]int)
+	last_matches := ""
+	for _, log := range strings.Split(issueContent, "\n") {
+		matches := group_rgx.FindStringSubmatch(log)
+		if len(matches) > 2 {
+			last_matches = log
+			if group_content[matches[1]] == nil {
+				group_content[matches[1]] = [][]string{}
+				group_count[matches[1]] = []int{}
+			}
+			exist := false
+			for index, grp_detail := range group_content[matches[1]] {
+				if reflect.DeepEqual(grp_detail, matches[2:]) {
+					group_count[matches[1]][index] += 1
+					exist = true
+					break
+				}
+			}
+			if !exist {
+				group_count[matches[1]] = append(group_count[matches[1]], 1)
+				group_content[matches[1]] = append(group_content[matches[1]], matches[2:])
+			}
+		}
+	}
+
+	issues_count := 0
+	for _, numSlice := range group_count {
+		for _, num := range numSlice {
+			issues_count += num
+		}
+	}
+	analysis_details.Issues[issue_name]["Number"] += strconv.Itoa(issues_count)
+
+	timestampRegex, _ := regexp.Compile(cfgFile.IssuesGeneralFields.Timestamp)
+	match := timestampRegex.FindStringSubmatch(last_matches)
+	if len(match) > 0 {
+		analysis_details.Issues[issue_name]["Timestamp"] = match[0]
+	}
+
+	log_rgx, err := regexp.Compile(cfgFile.IssuesGeneralFields.Log_level)
+	if err != nil {
+		return
+	}
+	match = log_rgx.FindStringSubmatch(last_matches)
+	if len(match) > 1 {
+		analysis_details.Issues[issue_name]["LogLevel"] = match[1]
+
+	}
+	for field, field_rgx := range cfgFile.IssuesGeneralFields.OtherFields {
+		field_rgx_comp, err := regexp.Compile(field_rgx)
+		if err != nil {
+			continue
+		}
+		match := field_rgx_comp.FindAllString(issueContent, -1)
+		analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
+
+	}
+
+	for field, field_rgx := range issue.additional_fields {
+		field_rgx_comp, err := regexp.Compile(field_rgx)
+		if err != nil {
+			continue
+		}
+		match := field_rgx_comp.FindAllString(issueContent, -1)
+		analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
+		headerMap[field] = true
+	}
+
+	groupedDetails := GroupedStruct{}
+	groupedDetails.Group_content = group_content
+	groupedDetails.Group_count = group_count
+	groupedDetails.Group_names = group_names
+	GroupedIssues[issue_name] = groupedDetails
+
+}
+func nongroupIssueDetails(issue issue, cfgFile *config, headerMap map[string]bool, issueContent string, issue_name string) {
+	issue_rgx, err := regexp.Compile(issue.regex)
+	if err != nil {
+		return
+	}
+	filter_logs := issue_rgx.FindAllString(issueContent, -1)
+	filter_logs_map := make(map[string]bool)
+	for _, filter_log := range filter_logs {
+		filter_logs_map[filter_log] = true
+	}
+	NonGroupedIssues[issue_name] = filter_logs_map
+
+	analysis_details.Issues[issue_name]["Number"] = strconv.Itoa(len(filter_logs))
+	issueContent = strings.Join(filter_logs, "\n")
+
+	if len(filter_logs) > 0 {
+		log_rgx, err := regexp.Compile(cfgFile.IssuesGeneralFields.Log_level)
+		if err != nil {
+			return
+		}
+		match := log_rgx.FindStringSubmatch(filter_logs[0])
+		if len(match) > 1 {
+			analysis_details.Issues[issue_name]["LogLevel"] = match[1]
+		}
+
+		for field, field_rgx := range cfgFile.IssuesGeneralFields.OtherFields {
+			field_rgx_comp, err := regexp.Compile(field_rgx)
+			if err != nil {
+				return
+			}
+			match := field_rgx_comp.FindAllString(issueContent, -1)
+			analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
+
+		}
+
+		for field, field_rgx := range issue.additional_fields {
+			field_rgx_comp, err := regexp.Compile(field_rgx)
+			if err != nil {
+				return
+			}
+			match := field_rgx_comp.FindAllString(issueContent, -1)
+			analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
+			headerMap[field] = true
+		}
+
+		timestampRegex, _ := regexp.Compile(cfgFile.IssuesGeneralFields.Timestamp)
+		match = timestampRegex.FindStringSubmatch(filter_logs[len(filter_logs)-1])
+		if len(match) > 0 {
+			analysis_details.Issues[issue_name]["Timestamp"] = match[0]
+		}
+	}
+}
+
 func extractConfig(cfgName string, bucket string) (*config, error) {
-	cfg_data, err := downloadFile(nil, bucket, cfgName)
+	cfg_data, err := utilities.DownloadFile(nil, bucket, cfgName)
 	if err != nil {
 		return nil, err
 	}
@@ -578,40 +464,6 @@ func extractConfig(cfgName string, bucket string) (*config, error) {
 	return &cfgFile, nil
 }
 
-func uploadConfigFile(r *http.Request) error {
-	r.ParseMultipartForm(10 << 20)
-	selectedBucket := r.FormValue("selectedFile")
-	file, handler, err := r.FormFile("myFile")
-	if err != nil {
-		return err
-	}
-	if filepath.Ext(handler.Filename) != ".yml" && filepath.Ext(handler.Filename) != ".yaml" {
-		return errors.New("Invalid Format")
-	}
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil
-	}
-
-	defer client.Close()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
-	defer cancel()
-	wc := client.Bucket(selectedBucket).Object(handler.Filename).NewWriter(ctx)
-	//wc := client.Bucket(bucket).Object(handler.Filename).NewWriter(ctx)
-	/*if _, err = io.WriteString(wc, "Bonjour par la"); err != nil {//will be used for update
-		return false, err
-	}*/
-	if _, err = io.Copy(wc, file); err != nil {
-		return err
-	}
-	if err := wc.Close(); err != nil {
-		return err
-	}
-	//update config file
-	cloudConfigs[selectedBucket] = append(cloudConfigs[selectedBucket], handler.Filename)
-	return nil
-}
 func uploadLogFile(w http.ResponseWriter, r *http.Request) (string, *string, string, string, error) {
 	r.ParseMultipartForm(10 << 20)
 	cfg_file := r.FormValue("selectedFile")
@@ -635,14 +487,21 @@ func uploadLogFile(w http.ResponseWriter, r *http.Request) (string, *string, str
 	if err != nil {
 		return "", nil, cfg_file, selectedBucket, err
 	}
-	if filepath.Ext(handler.Filename) != ".gz" && filepath.Ext(handler.Filename) != ".txt" {
-		return "", nil, cfg_file, selectedBucket, errors.New("Invalid Format")
+	content, err := extractLogContent(file, handler)
+	if err != nil {
+		return "", nil, cfg_file, selectedBucket, err
 	}
 	defer file.Close()
+	return content, &handler.Filename, cfg_file, selectedBucket, nil
+}
+func extractLogContent(file multipart.File, handler *multipart.FileHeader) (string, error) {
+	if filepath.Ext(handler.Filename) != ".gz" && filepath.Ext(handler.Filename) != ".txt" {
+		return "", errors.New("Invalid Format")
+	}
 	if filepath.Ext(handler.Filename) == ".gz" {
 		gz, err := gzip.NewReader(file)
 		if err != nil {
-			return "", nil, cfg_file, selectedBucket, err
+			return "", err
 		}
 		defer gz.Close()
 		fContent := ""
@@ -651,18 +510,14 @@ func uploadLogFile(w http.ResponseWriter, r *http.Request) (string, *string, str
 			fContent += scanner.Text()
 			fContent += "\n"
 		}
-		return fContent, &handler.Filename, cfg_file, selectedBucket, nil
+		return fContent, nil
 	} else {
-		if err != nil {
-			return "", nil, cfg_file, selectedBucket, err
-		}
 		data, err := ioutil.ReadAll(file)
 		if err != nil {
-			return "", nil, cfg_file, selectedBucket, err
+			return "", nil
 		}
-		return string(data), &handler.Filename, cfg_file, selectedBucket, nil
+		return string(data), nil
 	}
-
 }
 
 func logReport(w http.ResponseWriter, r *http.Request) {
@@ -711,76 +566,4 @@ func logReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-}
-
-func downloadFile(w io.Writer, bucket, object string) ([]byte, error) {
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("storage.NewClient: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
-	defer cancel()
-	rc, err := client.Bucket(bucket).Object(object).NewReader(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("Object(%q).NewReader: %v", object, err)
-	}
-
-	defer rc.Close()
-
-	data, err := ioutil.ReadAll(rc)
-	if err != nil {
-		return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
-	}
-	return data, nil
-}
-func getBuckets() ([]string, error) {
-	ctx := context.Background()
-	var buckets []string
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer cancel()
-	it := client.Buckets(ctx, project_id)
-	for {
-		battrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		buckets = append(buckets, battrs.Name)
-	}
-	return buckets, nil
-}
-
-func getConfigFiles(bucket string) ([]string, error) {
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-
-	it := client.Bucket(bucket).Objects(ctx, nil)
-	var configs []string
-	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		configs = append(configs, attrs.Name)
-	}
-	return configs, nil
 }
