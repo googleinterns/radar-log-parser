@@ -45,10 +45,6 @@ func UploadConfigFile(r *http.Request, project_id string, cloudConfigs map[strin
 	}
 
 	wc := client.Bucket(selectedBucket).Object(handler.Filename).NewWriter(ctx)
-	//wc := client.Bucket(bucket).Object(handler.Filename).NewWriter(ctx)
-	/*if _, err = io.WriteString(wc, "Bonjour par la"); err != nil {//will be used for update
-		return false, err
-	}*/
 	if _, err = io.Copy(wc, file); err != nil {
 		return cloudConfigs, err
 	}
@@ -147,8 +143,6 @@ func DisplayConfig(w http.ResponseWriter, r *http.Request, project_id string, re
 	if err != nil {
 		return "", "", "", err
 	}
-	//selector := "option[value=" + cfgfile + "]"
-	//selectedBucket, found := doc.Find(selector).Parent().Attr("label")
 	selectedBucket, found := doc.Find("optgroup").Attr("label")
 	if !found {
 		return "", "", "", err

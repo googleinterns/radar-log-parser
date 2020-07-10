@@ -312,7 +312,6 @@ func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]boo
 	}
 }
 func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (AnalysisDetails, map[string]GroupedStruct, map[string]map[string]bool, error) {
-
 	fScanner, fName, cfgName, bucket, err := uploadLogFile(w, r, project_id, region_id)
 	if err != nil {
 		return analysis_details, nil, nil, err
@@ -324,6 +323,7 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 	analysis_details.FileName = *fName
 	fContent := fScanner
 	analysis_details.RawLog = fContent
+
 	//Get the SpecificProcess logs
 	analysis_details.SpecificProcess = make(map[string]string)
 	for proc, proc_rgx := range cfgFile.SpecificProcess {
