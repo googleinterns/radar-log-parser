@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"path/filepath"
 	"radar-log-parser/go-app/utilities"
@@ -34,11 +33,8 @@ func UploadConfigFile(r *http.Request, project_id string, cloudConfigs map[strin
 			StorageClass: "STANDARD",
 			Location:     "US",
 		}); err != nil {
-			log.Println(err)
 			return cloudConfigs, err
 		}
-		log.Println(selectedBucket)
-
 	}
 	file, handler, err := r.FormFile("myFile")
 	if err != nil {
@@ -154,14 +150,11 @@ func DisplayConfig(w http.ResponseWriter, r *http.Request, project_id string, re
 	//selector := "option[value=" + cfgfile + "]"
 	//selectedBucket, found := doc.Find(selector).Parent().Attr("label")
 	selectedBucket, found := doc.Find("optgroup").Attr("label")
-	log.Println(selectedBucket)
-	//log.Println(cfgfile, doc.Find(selector).Parent().Text())
 	if !found {
 		return "", "", "", err
 	}
 	content, err := utilities.DownloadFile(w, selectedBucket, cfgfile)
 	if err != nil {
-		//http.Error(w, "Sorry, something went wrong", http.StatusInternalServerError)
 		return "", "", "", err
 	}
 	return selectedBucket, cfgfile, string(content), err

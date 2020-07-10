@@ -173,10 +173,12 @@ func extractLogContent(file multipart.File, handler *multipart.FileHeader) (stri
 		if err != nil {
 			return "", nil
 		}
+
 		return string(data), nil
 	}
 }
 func groupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]bool, issueContent string, issue_name string) {
+
 	group_rgx, err := regexp.Compile(issue.grouping)
 	if err != nil {
 		return
@@ -256,7 +258,6 @@ func groupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]bool, 
 	groupedDetails.Group_count = group_count
 	groupedDetails.Group_names = group_names
 	GroupedIssues[issue_name] = groupedDetails
-
 }
 func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]bool, issueContent string, issue_name string) {
 	issue_rgx, err := regexp.Compile(issue.regex)
@@ -311,6 +312,7 @@ func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]boo
 	}
 }
 func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (AnalysisDetails, map[string]GroupedStruct, map[string]map[string]bool, error) {
+
 	fScanner, fName, cfgName, bucket, err := uploadLogFile(w, r, project_id, region_id)
 	if err != nil {
 		return analysis_details, nil, nil, err
@@ -388,8 +390,5 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 		}
 	}
 	analysis_details.Header = header
-
 	return analysis_details, GroupedIssues, NonGroupedIssues, nil
-
-	//template.Must(template.ParseFiles("templates/report.html")).Execute(w, analysis_details)
 }

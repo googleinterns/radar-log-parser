@@ -94,38 +94,18 @@ p {
             {{end}}    
        </table> 
        {{else}} 
-            {{$after_lines := ""}}
-            {{$countLine :=0}}
-            {{range $index ,$line := .}}
-                {{if hightlightIssue $line}}
-                 <details>
-                    <summary>See more details</summary>
-                      <div>
-                        <textarea name="fContent" rows= {{$countLine}} cols="183">{{$after_lines}} </textarea>
-                      </div>
-                 </details>
-                 <p>{{$line}}</p>
-                 {{$countLine = 0}}
-                   {{$after_lines =""}}
-                 {{else}}
-                   {{$after_lines = addLine $after_lines $line}}
-                   {{$countLine = add $countLine 1}}
-                   <!-- {{if lt $countLine 5}}
-                       <p >{{$line}}</p>
-                    {{else}}
-                       {{if eq $countLine 5}}
-                         <p >......................................</p>
-                       {{end}}
-                    {{end}}
-                   -->
-                {{end}}
-            {{end}}
-            <details>
-                <summary>See more details</summary>
+          {{range $index ,$line := .Details}}
+              {{if index $.Highlight $index}}
+                <p>{{$line}}</p>
+              {{else}}
+                <details>
+                  <summary>See more details</summary>
                   <div>
-                    <textarea name="fContent" rows={{$countLine}} cols="183">{{$after_lines}} </textarea>
+                    <textarea name="fContent" cols="183">{{$line}} </textarea>
                   </div>
-             </details>
+                </details>
+              {{end}}
+          {{end}}    
        {{end}}   
   </body>
 </html>
