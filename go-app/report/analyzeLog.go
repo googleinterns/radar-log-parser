@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"errors"
-	"html/template"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
@@ -311,14 +310,14 @@ func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]boo
 		}
 	}
 }
-func analyseLog(w http.ResponseWriter, r *http.Request, project_id string, region_id string) {
+func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (AnalysisDetails, map[string]GroupedStruct, map[string]map[string]bool, error) {
 	fScanner, fName, cfgName, bucket, err := uploadLogFile(w, r, project_id, region_id)
 	if err != nil {
-		return
+		return analysis_details, nil, nil, err
 	}
 	cfgFile, err := extractConfig(cfgName, bucket)
 	if err != nil {
-		return
+		return analysis_details, nil, nil, err
 	}
 	analysis_details.FileName = *fName
 	fContent := fScanner
@@ -390,52 +389,7 @@ func analyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 	}
 	analysis_details.Header = header
 
-	template.Must(template.ParseFiles("templates/report.html")).Execute(w, analysis_details)
-}
-func logReport(w http.ResponseWriter, r *http.Request) {
-	switch file := r.URL.Path[len("/report/"):]; file {
-	case analysis_details.FileName:
-		template.Must(template.New("details.html").Funcs(template.FuncMap{"add": func(x, y int) int {
-			return 0
-		}, "addLine": func(x, y string) string {
-			return x + "\n" + y
-		}, "hightlightIssue": func(line string) bool {
-			return true
-		}, "detailType": func() string { return "Log" }}).ParseFiles("details.html")).Execute(w, analysis_details.RawLog)
-	default:
-		if file[:7] == "Details" {
-			issue_name := r.URL.Path[len("/report/Details/"):]
-			details, ok := GroupedIssues[issue_name]
-			if ok {
-				template.Must(template.New("details.html").Funcs(template.FuncMap{"add": func(x, y int) int {
-					return 0
-				}, "addLine": func(x, y string) string {
-					return x + "\n" + y
-				}, "hightlightIssue": func(line string) bool {
+	return analysis_details, GroupedIssues, NonGroupedIssues, nil
 
-					return true
-				}, "detailType": func() string { return "Group" }}).ParseFiles("details.html")).Execute(w, details)
-			} else {
-				template.Must(template.New("details.html").Funcs(template.FuncMap{"add": func(x, y int) int {
-					return x + y
-				}, "addLine": func(x, y string) string {
-					return x + "\n" + y
-				}, "hightlightIssue": func(line string) bool {
-					_, ok := NonGroupedIssues[issue_name][line]
-					return ok
-				}, "detailType": func() string { return "nonGroup" }}).ParseFiles("details.html")).Execute(w, strings.Split(analysis_details.RawLog, "\n"))
-			}
-		} else {
-			template.Must(template.New("details.html").Funcs(template.FuncMap{"add": func(x, y int) int {
-				return 0
-			}, "addLine": func(x, y string) string {
-				return x + "\n" + y
-			}, "hightlightIssue": func(line string) bool {
-
-				return true
-			}, "detailType": func() string { return "Log" }}).ParseFiles("details.html")).Execute(w, analysis_details.SpecificProcess[file])
-
-		}
-	}
-
+	//template.Must(template.ParseFiles("templates/report.html")).Execute(w, analysis_details)
 }

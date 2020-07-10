@@ -1,28 +1,16 @@
 package main
 
 import (
-	"bufio"
-	"compress/gzip"
-	"errors"
 	"html/template"
-	"io/ioutil"
-	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
+	"radar-log-parser/go-app/report"
 	"radar-log-parser/go-app/settings"
 	"radar-log-parser/go-app/utilities"
-	"reflect"
-	"regexp"
-	"sort"
-	"strconv"
 	"strings"
-
-	"github.com/PuerkitoBio/goquery"
-	"gopkg.in/yaml.v2"
 )
 
-type config struct {
+/*type config struct {
 	SpecificProcess     map[string]string
 	IssuesGeneralFields struct {
 		Number      string
@@ -69,12 +57,12 @@ type GroupedStruct struct {
 	Group_names   []string
 	Group_content map[string][][]string
 	Group_count   map[string][]int
-}
+}*/
 
 var (
-	analysis_details analysisDetails = analysisDetails{}
-	GroupedIssues                    = make(map[string]GroupedStruct)
-	NonGroupedIssues                 = make(map[string]map[string]bool)
+	analysis_details report.AnalysisDetails = report.AnalysisDetails{}
+	GroupedIssues                           = make(map[string]report.GroupedStruct)
+	NonGroupedIssues                        = make(map[string]map[string]bool)
 )
 
 var (
@@ -149,7 +137,8 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			} else if strings.Contains(page, "deleteConfig") {
 				delete_configTempl.Execute(w, cloudConfigs)
 			} else {
-				logReport(w, r)
+				report.LogReport(w, r, analysis_details, GroupedIssues, NonGroupedIssues)
+				//logReport(w, r)
 			}
 		} else {
 			homeTempl.Execute(w, cloudConfigs)
@@ -191,12 +180,21 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		template.Must(template.ParseFiles("templates/feedback.html")).Execute(w, nil)
 		//delete_configTempl.Execute(w, cloudConfigs)
 	default:
-		analyseLog(w, r)
+		details, grouped, non_grouped, err := report.AnalyseLog(w, r, project_id, region_id)
+		if err != nil {
+			return
+		}
+		analysis_details = details
+		GroupedIssues = grouped
+		NonGroupedIssues = non_grouped
+		template.Must(template.ParseFiles("templates/report.html")).Execute(w, analysis_details)
+		//analyseLog(w, r)
 
 	}
 
 }
 
+/*
 func analyseLog(w http.ResponseWriter, r *http.Request) {
 	fScanner, fName, cfgName, bucket, err := uploadLogFile(w, r)
 	if err != nil {
@@ -566,4 +564,4 @@ func logReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-}
+}*/
