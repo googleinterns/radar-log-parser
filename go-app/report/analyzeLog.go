@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 	"gopkg.in/yaml.v2"
@@ -325,14 +326,24 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 	analysis_details.RawLog = fContent
 
 	//Get the SpecificProcess logs
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(len(cfgFile.SpecificProcess))
 	analysis_details.SpecificProcess = make(map[string]string)
 	for proc, proc_rgx := range cfgFile.SpecificProcess {
-		proc_rgx_comp, err := regexp.Compile(proc_rgx)
-		if err != nil {
-			continue
-		}
-		analysis_details.SpecificProcess[proc] = strings.Join(proc_rgx_comp.FindAllString(fContent, -1), "\n")
+		go func(proc string, proc_rgx string) {
+			proc_rgx_comp, err := regexp.Compile(proc_rgx)
+			if err != nil {
+				waitGroup.Done()
+				return
+			}
+			proc_content := proc_rgx_comp.FindAllString(fContent, -1)
+			if len(proc_content) > 1 {
+				analysis_details.SpecificProcess[proc] = strings.Join(proc_rgx_comp.FindAllString(fContent, -1), "\n")
+			}
+			waitGroup.Done()
+		}(proc, proc_rgx)
 	}
+	waitGroup.Wait()
 	//Fill the header with general fields
 	headerMap := map[string]bool{"Issue": true, "Number": true, "Details": true, "Timestamp": true, "LogLevel": true}
 	for field, _ := range cfgFile.IssuesGeneralFields.OtherFields {
@@ -341,33 +352,41 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 	//Get the issues analysis details
 	analysis_details.Issues = make(map[string]map[string]string)
 	specific_proc_content := make(map[string]string)
-	for issue_name, issue := range cfgFile.Issues {
-		analysis_details.Issues[issue_name] = make(map[string]string)
-		//Filter the logs belonging to the issue specific process
-		issueContent := ""
-		for proc, proc_rgx := range issue.specific_process {
-			proc_issue, ok := analysis_details.SpecificProcess[proc]
-			if !ok {
-				proc_issue, ok := specific_proc_content[proc]
-				if !ok {
-					proc_rgx_comp, err := regexp.Compile(proc_rgx)
-					if err != nil {
-						continue
-					}
-					proc_issue = strings.Join(proc_rgx_comp.FindAllString(fContent, -1), "\n")
-					specific_proc_content[proc] = proc_issue
-				}
-			}
-			issueContent += proc_issue
-			issueContent += "\n"
-		}
+	var wg sync.WaitGroup
+	wg.Add(len(cfgFile.Issues))
 
-		if issue.detailing_mode == "group" {
-			groupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name)
-		} else {
-			nongroupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name)
-		}
+	for issue_name, issue := range cfgFile.Issues {
+		go func(issue_name string, issue Issue) {
+			analysis_details.Issues[issue_name] = make(map[string]string)
+			//Filter the logs belonging to the issue specific process
+			issueContent := ""
+			for proc, proc_rgx := range issue.specific_process {
+				proc_issue, ok := analysis_details.SpecificProcess[proc]
+				if !ok {
+					proc_issue, ok := specific_proc_content[proc]
+					if !ok {
+						proc_rgx_comp, err := regexp.Compile(proc_rgx)
+						if err != nil {
+							continue
+						}
+						proc_issue = strings.Join(proc_rgx_comp.FindAllString(fContent, -1), "\n")
+						specific_proc_content[proc] = proc_issue
+					}
+				}
+				issueContent += proc_issue
+				issueContent += "\n"
+			}
+
+			if issue.detailing_mode == "group" {
+				groupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name)
+
+			} else {
+				nongroupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name)
+			}
+			wg.Done()
+		}(issue_name, issue)
 	}
+	wg.Wait()
 
 	// Get all issues in a prioritized order
 	issues := make([]string, 0, len(cfgFile.Issues))

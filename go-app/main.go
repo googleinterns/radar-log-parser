@@ -3,17 +3,22 @@ package main
 import (
 	"html/template"
 	"net/http"
-	"os"
 	"radar-log-parser/go-app/report"
 	"radar-log-parser/go-app/settings"
 	"radar-log-parser/go-app/utilities"
 	"strings"
 )
 
+type Feedback struct {
+	Error   bool
+	Content string
+}
+
 var (
 	analysis_details report.AnalysisDetails = report.AnalysisDetails{}
 	GroupedIssues                           = make(map[string]report.GroupedStruct)
 	NonGroupedIssues                        = make(map[string]map[string]bool)
+	feedBack                                = Feedback{}
 )
 
 var (
@@ -31,13 +36,15 @@ var (
 	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com"}
 ) //TODO: Put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
+
 var (
 	cfg_edit    string
 	bucket_edit string
 )
 
 func main() {
-	port := os.Getenv("PORT")
+	//port := os.Getenv("PORT")
+	port := "8080"
 	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir("assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", fs))
@@ -99,23 +106,37 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	case "UploadConfig":
 		configs, err := settings.UploadConfigFile(r, project_id, cloudConfigs)
 		if err != nil {
+			feedBack.Error = true
+			feedBack.Content = err.Error()
+			feedbackTempl.Execute(w, feedBack)
 			return
 		}
 		cloudConfigs = configs
 
-		feedbackTempl.Execute(w, nil)
+		feedBack.Error = false
+		feedBack.Content = "Upload Config"
+		feedbackTempl.Execute(w, feedBack)
 	case "editConfig":
 		if r.FormValue("action") == "Save" {
 			err := settings.SaveConfig(r, bucket_edit, cfg_edit)
 			if err != nil {
+				feedBack.Error = true
+				feedBack.Content = err.Error()
+				feedbackTempl.Execute(w, feedBack)
 				return
 			}
+			feedBack.Error = false
+			feedBack.Content = "Edit Config"
+			feedbackTempl.Execute(w, feedBack)
 			feedbackTempl.Execute(w, nil)
 		} else {
 			bck, cfg, content, err := settings.DisplayConfig(w, r, project_id, region_id)
 			bucket_edit = bck
 			cfg_edit = cfg
 			if err != nil {
+				feedBack.Error = true
+				feedBack.Content = err.Error()
+				feedbackTempl.Execute(w, feedBack)
 				return
 			}
 			edit_configTempl.Execute(w, content)
@@ -124,13 +145,21 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	case "deleteConfig":
 		configs, err := settings.DeleteConfig(r, project_id, region_id, cloudConfigs)
 		if err != nil {
+			feedBack.Error = true
+			feedBack.Content = err.Error()
+			feedbackTempl.Execute(w, feedBack)
 			return
 		}
 		cloudConfigs = configs
-		feedbackTempl.Execute(w, nil)
+		feedBack.Error = false
+		feedBack.Content = "Delete Config"
+		feedbackTempl.Execute(w, feedBack)
 	default:
 		details, grouped, non_grouped, err := report.AnalyseLog(w, r, project_id, region_id)
 		if err != nil {
+			feedBack.Error = true
+			feedBack.Content = err.Error()
+			feedbackTempl.Execute(w, feedBack)
 			return
 		}
 		analysis_details = details

@@ -5,7 +5,27 @@
   <meta charset="utf-8" >
   <title> Radar-log-parser</title>
  <link rel="stylesheet" href="/assets/styles.css">
-
+ <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+ <style>
+    .error {
+        font-size: 20px;
+        margin-left:50%;
+        margin-bottom :5%;
+        margin-top :10%;
+    }
+    .success{
+        font-size:20px;
+        margin-left:50%;
+    }
+    i {
+       font-size:150px;
+       color:green;
+       margin-right:5%;
+    }
+    span {
+       font-size:100px;
+    }
+ </style>
 </head>
 <body>
     <div class="header">
@@ -19,6 +39,15 @@
          </div>
         </div>
     </div>
-    <h1 style="color:green;">Success</h1>
+    {{if .Error}}
+      <div >
+        <p class="error"> <span>&#128542;</span></p>
+        <p>{{.Content}}</p>
+      </div>
+    {{else }}
+      <div >
+        <p class="success" ><i class="fa fa-check-circle"></i>{{.Content}} Successful</p>
+      </div> 
+    {{end}}
 </body>
 </html>

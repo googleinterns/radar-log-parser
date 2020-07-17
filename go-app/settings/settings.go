@@ -143,7 +143,7 @@ func DisplayConfig(w http.ResponseWriter, r *http.Request, project_id string, re
 	if err != nil {
 		return "", "", "", err
 	}
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
+	selectedBucket, found := doc.Find("option[value=" + cfgfile + "]").Attr("label")
 	if !found {
 		return "", "", "", err
 	}
