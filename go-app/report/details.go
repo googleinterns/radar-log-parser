@@ -3,15 +3,24 @@ package report
 import (
 	"html/template"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 )
 
-func LogReport(w http.ResponseWriter, r *http.Request, analysisDetails AnalysisDetails, GroupedIssues map[string]GroupedStruct, NonGroupedIssues map[string]map[string]bool) {
+func LogReport(w http.ResponseWriter, r *http.Request, analysisDetails AnalysisDetails, GroupedIssues map[string]GroupedStruct, NonGroupedIssues map[string]map[string]bool, ImportantEvents map[string]int) {
 	switch file := r.URL.Path[len("/report/"):]; file {
 	case analysis_details.FileName:
 		template.Must(template.New("details.html").Funcs(template.FuncMap{"detailType": func() string { return "Log" }}).ParseFiles("templates/details.html")).Execute(w, analysis_details.RawLog)
-
+	case "events":
+		events := make([]string, len(ImportantEvents), len(ImportantEvents))
+		for ev, _ := range ImportantEvents {
+			events = append(events, ev)
+		}
+		sort.Slice(events, func(i, j int) bool {
+			return ImportantEvents[events[i]] < ImportantEvents[events[j]]
+		})
+		template.Must(template.New("events.html").Funcs(template.FuncMap{}).ParseFiles("templates/events.html")).Execute(w, events)
 	default:
 		if file[:7] == "Details" {
 			issue_name := r.URL.Path[len("/report/Details/"):]

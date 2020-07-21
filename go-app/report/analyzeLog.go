@@ -29,8 +29,9 @@ type Config struct {
 		Log_level   string
 		OtherFields map[string]string
 	}
-	Issues   map[string]Issue
-	Priority map[string]int
+	Issues          map[string]Issue
+	Priority        map[string]int
+	ImportantEvents map[string]string
 }
 
 type ConfigInterface struct {
@@ -42,8 +43,9 @@ type ConfigInterface struct {
 		Log_level   string            `yaml:"LogLevel"`
 		OtherFields map[string]string `yaml:"OtherFields"`
 	} `yaml:"IssuesGeneralFields"`
-	Issues   map[string]interface{} `yaml:"Issues"`
-	Priority map[string]int         `yaml:"Priority"`
+	Issues          map[string]interface{} `yaml:"Issues"`
+	Priority        map[string]int         `yaml:"Priority"`
+	ImportantEvents map[string]string      `yaml:"ImportantEvents"`
 }
 type Issue struct {
 	specific_process  map[string]string
@@ -71,6 +73,7 @@ var (
 	analysis_details AnalysisDetails = AnalysisDetails{}
 	GroupedIssues                    = make(map[string]GroupedStruct)
 	NonGroupedIssues                 = make(map[string]map[string]bool)
+	ImportantEvents                  = make(map[string]int)
 )
 
 func extractConfig(cfgName string, bucket string) (*Config, error) {
@@ -90,6 +93,7 @@ func extractConfig(cfgName string, bucket string) (*Config, error) {
 	cfgFile.IssuesGeneralFields.Timestamp = cfg.IssuesGeneralFields.Timestamp
 	cfgFile.Priority = cfg.Priority
 	cfgFile.SpecificProcess = cfg.SpecificProcess
+	cfgFile.ImportantEvents = cfg.ImportantEvents
 	cfgFile.Issues = make(map[string]Issue)
 	for issue_name, _ := range cfg.Issues {
 		myIssues := Issue{}
@@ -312,20 +316,7 @@ func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]boo
 		}
 	}
 }
-func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (AnalysisDetails, map[string]GroupedStruct, map[string]map[string]bool, error) {
-	fScanner, fName, cfgName, bucket, err := uploadLogFile(w, r, project_id, region_id)
-	if err != nil {
-		return analysis_details, nil, nil, err
-	}
-	cfgFile, err := extractConfig(cfgName, bucket)
-	if err != nil {
-		return analysis_details, nil, nil, err
-	}
-	analysis_details.FileName = *fName
-	fContent := fScanner
-	analysis_details.RawLog = fContent
-
-	//Get the SpecificProcess logs
+func getSpecProcessLogs(cfgFile *Config, fContent string) {
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(len(cfgFile.SpecificProcess))
 	analysis_details.SpecificProcess = make(map[string]string)
@@ -344,12 +335,9 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 		}(proc, proc_rgx)
 	}
 	waitGroup.Wait()
-	//Fill the header with general fields
-	headerMap := map[string]bool{"Issue": true, "Number": true, "Details": true, "Timestamp": true, "LogLevel": true}
-	for field, _ := range cfgFile.IssuesGeneralFields.OtherFields {
-		headerMap[field] = true
-	}
-	//Get the issues analysis details
+
+}
+func getIssueDetails(cfgFile *Config, fContent string, headerMap map[string]bool) {
 	analysis_details.Issues = make(map[string]map[string]string)
 	specific_proc_content := make(map[string]string)
 	var wg sync.WaitGroup
@@ -387,7 +375,55 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 		}(issue_name, issue)
 	}
 	wg.Wait()
-
+}
+func getImportantEvents(cfgFile *Config, fContent string) {
+	if len(cfgFile.ImportantEvents) < 1 {
+		return
+	}
+	contentMap := make(map[string]int)
+	contentSlice := strings.Split(fContent, "\n")
+	for index, line := range contentSlice {
+		contentMap[line] = index
+	}
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(len(cfgFile.ImportantEvents))
+	for ev, ev_rgx := range cfgFile.ImportantEvents {
+		go func(ev string, ev_rgx string) {
+			ev_rgx_comp, err := regexp.Compile(ev_rgx)
+			if err != nil {
+				waitGroup.Done()
+				return
+			}
+			ev_content := ev_rgx_comp.FindString(fContent)
+			if ev_content != "" {
+				ImportantEvents[ev] = contentMap[ev_content]
+			} else {
+				ImportantEvents[ev] = -1
+			}
+			waitGroup.Done()
+		}(ev, ev_rgx)
+	}
+	waitGroup.Wait()
+}
+func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (AnalysisDetails, map[string]GroupedStruct, map[string]map[string]bool, map[string]int, error) {
+	fScanner, fName, cfgName, bucket, err := uploadLogFile(w, r, project_id, region_id)
+	if err != nil {
+		return analysis_details, nil, nil, nil, err
+	}
+	cfgFile, err := extractConfig(cfgName, bucket)
+	if err != nil {
+		return analysis_details, nil, nil, nil, err
+	}
+	analysis_details.FileName = *fName
+	fContent := fScanner
+	analysis_details.RawLog = fContent
+	getSpecProcessLogs(cfgFile, fContent)
+	//Fill the header with general fields
+	headerMap := map[string]bool{"Issue": true, "Number": true, "Details": true, "Timestamp": true, "LogLevel": true}
+	for field, _ := range cfgFile.IssuesGeneralFields.OtherFields {
+		headerMap[field] = true
+	}
+	getIssueDetails(cfgFile, fContent, headerMap)
 	// Get all issues in a prioritized order
 	issues := make([]string, 0, len(cfgFile.Issues))
 	for k := range cfgFile.Issues {
@@ -409,5 +445,6 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 		}
 	}
 	analysis_details.Header = header
-	return analysis_details, GroupedIssues, NonGroupedIssues, nil
+	getImportantEvents(cfgFile, fContent)
+	return analysis_details, GroupedIssues, NonGroupedIssues, ImportantEvents, nil
 }

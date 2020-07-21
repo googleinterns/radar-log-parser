@@ -41,6 +41,7 @@ var (
 	cfg_edit    string
 	bucket_edit string
 )
+var ImportantEvents = make(map[string]int)
 
 func main() {
 	//port := os.Getenv("PORT")
@@ -95,7 +96,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			} else if strings.Contains(page, "deleteConfig") {
 				delete_configTempl.Execute(w, cloudConfigs)
 			} else {
-				report.LogReport(w, r, analysis_details, GroupedIssues, NonGroupedIssues)
+				report.LogReport(w, r, analysis_details, GroupedIssues, NonGroupedIssues, ImportantEvents)
 			}
 		} else {
 			homeTempl.Execute(w, cloudConfigs)
@@ -155,7 +156,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		feedBack.Content = "Delete Config"
 		feedbackTempl.Execute(w, feedBack)
 	default:
-		details, grouped, non_grouped, err := report.AnalyseLog(w, r, project_id, region_id)
+		details, grouped, non_grouped, events, err := report.AnalyseLog(w, r, project_id, region_id)
 		if err != nil {
 			feedBack.Error = true
 			feedBack.Content = err.Error()
@@ -165,6 +166,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		analysis_details = details
 		GroupedIssues = grouped
 		NonGroupedIssues = non_grouped
+		ImportantEvents = events
 		reportTempl.Execute(w, analysis_details)
 	}
 
