@@ -22,7 +22,7 @@
     </div>
 
     <div>
-        {{ range $index, $ev := . }}
+        {{ range $index, $ev := .Events }}
             <a class = "details"  href="report/events/{{$ev}}">{{$ev}}</a>
             <br>
             <br>

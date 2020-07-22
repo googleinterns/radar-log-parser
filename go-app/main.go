@@ -3,6 +3,7 @@ package main
 import (
 	"html/template"
 	"net/http"
+	"os"
 	"radar-log-parser/go-app/report"
 	"radar-log-parser/go-app/settings"
 	"radar-log-parser/go-app/utilities"
@@ -15,10 +16,8 @@ type Feedback struct {
 }
 
 var (
-	analysis_details report.AnalysisDetails = report.AnalysisDetails{}
-	GroupedIssues                           = make(map[string]report.GroupedStruct)
-	NonGroupedIssues                        = make(map[string]map[string]bool)
-	feedBack                                = Feedback{}
+	feedBack = Feedback{}
+	CfgFile  = report.Config{}
 )
 
 var (
@@ -41,22 +40,17 @@ var (
 	cfg_edit    string
 	bucket_edit string
 )
-var ImportantEvents = make(map[string]int)
 
 func main() {
-	//port := os.Getenv("PORT")
-	port := "8080"
+	port := os.Getenv("PORT")
 	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir("assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", fs))
 	mux.HandleFunc("/", homeHandler)
-
 	fillConfigMap()
-
 	http.ListenAndServe(":"+port, mux)
 }
 func fillConfigMap() {
-
 	buckets, err := utilities.GetBuckets(project_id)
 	if err != nil {
 		return
@@ -76,7 +70,15 @@ func fillConfigMap() {
 			}
 			cloudConfigs[bucket] = cfg
 		}
-
+	}
+}
+func getFeedBack(err error, content string) {
+	if err != nil {
+		feedBack.Error = true
+		feedBack.Content = err.Error()
+	} else {
+		feedBack.Error = false
+		feedBack.Content = content
 	}
 }
 func homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +98,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			} else if strings.Contains(page, "deleteConfig") {
 				delete_configTempl.Execute(w, cloudConfigs)
 			} else {
-				report.LogReport(w, r, analysis_details, GroupedIssues, NonGroupedIssues, ImportantEvents)
+				report.LogReport(w, r, report.FullLogDetails)
 			}
 		} else {
 			homeTempl.Execute(w, cloudConfigs)
@@ -106,37 +108,23 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	switch page {
 	case "UploadConfig":
 		configs, err := settings.UploadConfigFile(r, project_id, cloudConfigs)
-		if err != nil {
-			feedBack.Error = true
-			feedBack.Content = err.Error()
-			feedbackTempl.Execute(w, feedBack)
-			return
+		getFeedBack(err, "Upload Config")
+		if err == nil {
+			cloudConfigs = configs
 		}
 		cloudConfigs = configs
-
-		feedBack.Error = false
-		feedBack.Content = "Upload Config"
 		feedbackTempl.Execute(w, feedBack)
 	case "editConfig":
 		if r.FormValue("action") == "Save" {
 			err := settings.SaveConfig(r, bucket_edit, cfg_edit)
-			if err != nil {
-				feedBack.Error = true
-				feedBack.Content = err.Error()
-				feedbackTempl.Execute(w, feedBack)
-				return
-			}
-			feedBack.Error = false
-			feedBack.Content = "Edit Config"
+			getFeedBack(err, "Edit Config")
 			feedbackTempl.Execute(w, feedBack)
-			feedbackTempl.Execute(w, nil)
 		} else {
 			bck, cfg, content, err := settings.DisplayConfig(w, r, project_id, region_id)
 			bucket_edit = bck
 			cfg_edit = cfg
 			if err != nil {
-				feedBack.Error = true
-				feedBack.Content = err.Error()
+				getFeedBack(err, "Edit Config")
 				feedbackTempl.Execute(w, feedBack)
 				return
 			}
@@ -145,29 +133,19 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	case "deleteConfig":
 		configs, err := settings.DeleteConfig(r, project_id, region_id, cloudConfigs)
-		if err != nil {
-			feedBack.Error = true
-			feedBack.Content = err.Error()
-			feedbackTempl.Execute(w, feedBack)
-			return
+		getFeedBack(err, "Delete Config")
+		if err == nil {
+			cloudConfigs = configs
 		}
-		cloudConfigs = configs
-		feedBack.Error = false
-		feedBack.Content = "Delete Config"
 		feedbackTempl.Execute(w, feedBack)
 	default:
-		details, grouped, non_grouped, events, err := report.AnalyseLog(w, r, project_id, region_id)
+		err := report.AnalyseLog(w, r, project_id, region_id)
 		if err != nil {
-			feedBack.Error = true
-			feedBack.Content = err.Error()
+			getFeedBack(err, "Delete Config")
 			feedbackTempl.Execute(w, feedBack)
 			return
 		}
-		analysis_details = details
-		GroupedIssues = grouped
-		NonGroupedIssues = non_grouped
-		ImportantEvents = events
-		reportTempl.Execute(w, analysis_details)
+		reportTempl.Execute(w, report.FullLogDetails.Analysis_details)
 	}
 
 }

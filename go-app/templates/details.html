@@ -38,8 +38,21 @@ textarea {
 p {
   color:#ff00ff;
 }
+.log_level{
+  margin-bottom:2%;
+  margin-top :5px; 
+}
+select {
+  background-color: #ff00ff;
+}
 
 </style>
+<script >
+  document.getElementById("fContent").cols =window.innerWidth -5;
+  function submit() {
+    document.getElementById("levelForm").submit();
+  }
+</script>
 </head>
   <body>
     <div class="header">
@@ -55,8 +68,19 @@ p {
     </div>
       {{$type_issue := detailType}}
       {{if eq $type_issue "Log"}}
+        <div class ="log_level">
+          <form method="POST" enctype="multipart/form-data" id = "levelForm">
+              <label id ="log_level" >Pick a Log Level:</label>
+              <select name = "selectedLevel"   onchange="submit();"required>
+                <option id = "All" value="All" selected >All</option>
+                {{range $index ,$level := .LogLevels}}
+                  <option id = "{{ $level}}" value="{{ $level }}">{{ $level }}</option>
+                {{end}}
+              </select>
+          </form>
+        </div>
          <div>
-                <textarea name="fContent" >{{.}} </textarea>
+            <textarea name="fContent" >{{.Rawlog}} </textarea>
           </div>
       {{else if eq $type_issue "Group"}}
         <table id="analysisResult">
@@ -101,7 +125,8 @@ p {
                 <details>
                   <summary>See more details</summary>
                   <div>
-                    <textarea name="fContent" cols="183">{{$line}} </textarea>
+                    {{$countLine := countLine $line}}
+                    <textarea name="fContent" id = "fContent" rows={{$countLine}} >{{$line}} </textarea>
                   </div>
                 </details>
               {{end}}

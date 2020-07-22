@@ -54,7 +54,7 @@ body {
   cursor: pointer;
   margin-left:127px;
 }
-#log_file_upload,#config_file_upload,#bucket{
+#log_file_upload,#config_file_upload,#bucket,#log_level{
  font-size: 20px;
 }
 #log_file ,#edit_config{
