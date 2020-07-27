@@ -86,11 +86,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		if len(page) > 5 {
 			if strings.Contains(page, "UploadConfig") {
-				bucketList := make([]string, 0, len(cloudConfigs))
-				for k := range cloudConfigs {
-					bucketList = append(bucketList, k)
-				}
-				upload_configTempl.Execute(w, bucketList)
+				fillUploadCfgPage(w, r)
 			} else if strings.Contains(page, "analyzeLog") {
 				homeTempl.Execute(w, cloudConfigs)
 			} else if strings.Contains(page, "editConfig") {
@@ -106,46 +102,73 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch page {
+	case "loglevel":
+		loadLogLevel(w, r)
 	case "UploadConfig":
-		configs, err := settings.UploadConfigFile(r, project_id, cloudConfigs)
-		getFeedBack(err, "Upload Config")
-		if err == nil {
-			cloudConfigs = configs
-		}
-		cloudConfigs = configs
-		feedbackTempl.Execute(w, feedBack)
+		loadUploadConfig(w, r)
 	case "editConfig":
-		if r.FormValue("action") == "Save" {
-			err := settings.SaveConfig(r, bucket_edit, cfg_edit)
-			getFeedBack(err, "Edit Config")
-			feedbackTempl.Execute(w, feedBack)
-		} else {
-			bck, cfg, content, err := settings.DisplayConfig(w, r, project_id, region_id)
-			bucket_edit = bck
-			cfg_edit = cfg
-			if err != nil {
-				getFeedBack(err, "Edit Config")
-				feedbackTempl.Execute(w, feedBack)
-				return
-			}
-			edit_configTempl.Execute(w, content)
-		}
+		loadEditConfig(w, r)
 
 	case "deleteConfig":
-		configs, err := settings.DeleteConfig(r, project_id, region_id, cloudConfigs)
-		getFeedBack(err, "Delete Config")
-		if err == nil {
-			cloudConfigs = configs
-		}
-		feedbackTempl.Execute(w, feedBack)
+		loadDeleteConfig(w, r)
 	default:
-		err := report.AnalyseLog(w, r, project_id, region_id)
+		loadAnalyseLog(w, r)
+	}
+
+}
+func fillUploadCfgPage(w http.ResponseWriter, r *http.Request) {
+	bucketList := make([]string, 0, len(cloudConfigs))
+	for k := range cloudConfigs {
+		bucketList = append(bucketList, k)
+	}
+	upload_configTempl.Execute(w, bucketList)
+}
+func loadLogLevel(w http.ResponseWriter, r *http.Request) {
+	r.ParseMultipartForm(10 << 20)
+	level := r.FormValue("selectedLevel")
+	logContent := report.GetLogLeveldetails(report.FullLogDetails.Analysis_details.Platform, level, report.FullLogDetails.Analysis_details.RawLog)
+	w.Write([]byte(logContent))
+}
+func loadUploadConfig(w http.ResponseWriter, r *http.Request) {
+	configs, err := settings.UploadConfigFile(r, project_id, cloudConfigs)
+	getFeedBack(err, "Upload Config")
+	if err == nil {
+		cloudConfigs = configs
+	}
+	cloudConfigs = configs
+	feedbackTempl.Execute(w, feedBack)
+}
+func loadEditConfig(w http.ResponseWriter, r *http.Request) {
+	if r.FormValue("action") == "Save" {
+		err := settings.SaveConfig(r, bucket_edit, cfg_edit)
+		getFeedBack(err, "Edit Config")
+		feedbackTempl.Execute(w, feedBack)
+	} else {
+		bck, cfg, content, err := settings.DisplayConfig(w, r, project_id, region_id)
+		bucket_edit = bck
+		cfg_edit = cfg
 		if err != nil {
-			getFeedBack(err, "Delete Config")
+			getFeedBack(err, "Edit Config")
 			feedbackTempl.Execute(w, feedBack)
 			return
 		}
-		reportTempl.Execute(w, report.FullLogDetails.Analysis_details)
+		edit_configTempl.Execute(w, content)
 	}
-
+}
+func loadDeleteConfig(w http.ResponseWriter, r *http.Request) {
+	configs, err := settings.DeleteConfig(r, project_id, region_id, cloudConfigs)
+	getFeedBack(err, "Delete Config")
+	if err == nil {
+		cloudConfigs = configs
+	}
+	feedbackTempl.Execute(w, feedBack)
+}
+func loadAnalyseLog(w http.ResponseWriter, r *http.Request) {
+	err := report.AnalyseLog(w, r, project_id, region_id)
+	if err != nil {
+		getFeedBack(err, "Delete Config")
+		feedbackTempl.Execute(w, feedBack)
+		return
+	}
+	reportTempl.Execute(w, report.FullLogDetails.Analysis_details)
 }
