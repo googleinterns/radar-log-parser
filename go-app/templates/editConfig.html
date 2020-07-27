@@ -1,0 +1,45 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" >
+  <title> Radar-log-parser</title>
+ <link rel="stylesheet" href="/assets/styles.css">
+<style>
+form {
+  display:inline-block;
+  margin: 2% 1% 2% 1%;
+}
+textarea {
+  font-family: Arial;
+  font-size: 12pt;
+  width:90vw;
+  height:65vw;
+}
+
+input[type=submit] {
+    margin-left:85vw;
+}
+</style>
+
+</head>
+<body>
+
+    <div class="header">
+        <a  class="logo">Log Parser</a>
+        <div class="header-right">
+         <a class="settings">Settings</a>
+         <div class = "settings-content">
+          <a href="UploadConfig" >Upload Config</a>
+          <a href="deleteConfig">Delete Config</a>
+          <a href="editConfig">EditConfig</a>
+         </div>
+        </div>
+      </div>
+
+    <form method="POST" enctype="multipart/form-data" id = "configForm">
+        <input type="submit" name="action"  value = "Save" >
+       <textarea  name ="configContent">{{.}}</textarea>
+    </form>
+</body>
+</html>

@@ -1,0 +1,54 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" >
+  <title> Radar-log-parser</title>
+ <link rel="stylesheet" href="/assets/styles.css">
+ <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+ <style>
+    .error {
+        font-size: 20px;
+        margin-left:50%;
+        margin-bottom :5%;
+        margin-top :10%;
+    }
+    .success{
+        font-size:20px;
+        margin-left:30%;
+        margin-top :10%;
+    }
+    i {
+       font-size:500px;
+       color:green;
+       margin-right:5%;
+    }
+    span {
+       font-size:100px;
+    }
+ </style>
+</head>
+<body>
+    <div class="header">
+        <a  class="logo">Log Parser</a>
+        <div class="header-right">
+         <a class="settings">Settings</a>
+         <div class = "settings-content">
+          <a href="UploadConfig" >Upload Config</a>
+          <a href="deleteConfig">Delete Config</a>
+          <a href="editConfig">EditConfig</a>
+         </div>
+        </div>
+    </div>
+    {{if .Error}}
+      <div >
+        <p class="error"> <span>&#128542;</span></p>
+        <p>{{.Content}}</p>
+      </div>
+    {{else }}
+      <div >
+        <p class="success" ><i class="fa fa-check-circle"></i>{{.Content}} Successful</p>
+      </div> 
+    {{end}}
+</body>
+</html>
