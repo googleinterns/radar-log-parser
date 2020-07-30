@@ -2,6 +2,7 @@ package report
 
 import (
 	"html/template"
+	"log"
 	"net/http"
 	"regexp"
 	"sort"
@@ -18,6 +19,7 @@ var (
 	log_levels_rgx = map[string]map[string]string{"Ios": map[string]string{"start": "", "end": ""},
 		"my-android-bucket": map[string]string{"start": "(?m)^(?:0[1-9]|1[0-2])-(?:0[1-9]|(?:1|2)[0-9]|3(?:0|1))\\s(?:(?:(?:0|1)[0-9])|(?:2[0-3])):[0-5][0-9]:[0-5][0-9]\\.\\d{3}(?:\\s)*\\d{4,5}(?:\\s)*\\d{4,5}\\s", "end": "\\s.*"}}
 )
+var OrderedEventsLine []int
 
 func LogReport(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetails) {
 	file := r.URL.Path[len("/report/"):]
@@ -76,14 +78,21 @@ func loadNonGroupDetails(w http.ResponseWriter, issue_name string, fullLogDetail
 	})
 }
 func loadEvents(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetails) {
+	log.Println("event page initiated")
 	GetImportantEvents(&CfgFile, FullLogDetails.Analysis_details.RawLog)
-	ev_lines := make([]int, len(fullLogDetails.ImportantEvents), len(fullLogDetails.ImportantEvents))
-	for line, _ := range fullLogDetails.ImportantEvents {
+	log.Println("Got important events")
+	log.Println("events map", FullLogDetails.ImportantEvents)
+	ev_lines := make([]int, 0, len(FullLogDetails.ImportantEvents))
+	for line, _ := range FullLogDetails.ImportantEvents {
 		ev_lines = append(ev_lines, line)
+		log.Println("Append line", line)
 	}
 	sort.Ints(ev_lines)
+	OrderedEventsLine = ev_lines
 	event_template, err := template.New("events.html").Funcs(template.FuncMap{}).ParseFiles("templates/events.html")
 	template := template.Must(event_template, err)
+	log.Println("events lines", ev_lines)
+	log.Println("events map", FullLogDetails.ImportantEvents)
 	template.Execute(w, struct {
 		MatchLines []int
 		Events     map[int]string
@@ -93,10 +102,13 @@ func loadEvents(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetai
 	})
 }
 func loadRawLog(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetails) {
+	log.Println("load raw log initiated")
 	FuncMap := template.FuncMap{
 		"detailType": func() string { return "RawLog" },
 		"countLine":  CountLine,
 	}
+	log.Println("fullLogDetails", FullLogDetails)
+	log.Println("raw logs", FullLogDetails.Analysis_details.RawLog)
 	detail_template, err := template.New("details.html").Funcs(FuncMap).ParseFiles("templates/details.html")
 	template := template.Must(detail_template, err)
 	template.Execute(w, struct {

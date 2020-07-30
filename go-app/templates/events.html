@@ -1,33 +1,162 @@
-
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" >
-  <title> Radar-log-parser</title>
- <link rel="stylesheet" href="/assets/styles.css">
- <style>
- </style>
+    <meta charset="utf-8" >
+    <title> Radar-log-parser</title>
+   <link rel="stylesheet" href="/assets/styles.css">
+   <style>
+     .details{
+        display: none;
+     }
+    
+     .banner_after,.banner_before{
+        width:100%;
+        padding:0.5%;
+        background-color: gray;
+        margin-bottom: 0.5%;
+     }
+     span{
+        cursor: pointer;
+        margin-left:10%;
+     }
+     #main{
+        margin-left:40%;
+     }
+    .event {
+        color: fuchsia;
+        cursor: pointer; 
+        text-align: left;
+        text-decoration: underline;
+     }
+  </style>
+  <script> 
+   function expandContent(element){
+     var content_elem = element.parentNode.nextElementSibling;
+     var expand_number = element.innerHTML;
+     if (expand_number == "Block"){
+        content_elem.style.display = "none";
+        return;
+     }
+     if (content_elem.style.display === "none") {
+        content_elem.style.display = "block";
+     }
+     var line_number = parseInt(content_elem.getAttribute("data-line-number"));
+     if(line_number<0 || line_number>=Math.pow(2, 52)){
+         return;
+     }
+     var size;
+     if(expand_number == "All"){
+        size =  Math.pow(2, 52) ;
+        if(element.parentNode.getAttribute("class")=="banner_before"){
+            size = -size;
+        }
+     }
+     else{
+       size = parseInt(expand_number);
+     }
+     var startIndex;
+     var endIndex ;
+     var next_line_number;
+     if(size<0) {
+        startIndex = line_number+size;
+        endIndex = line_number;
+        next_line_number = startIndex -1;
+     }
+     else{
+        startIndex = line_number;
+        endIndex = line_number+size;
+        next_line_number = endIndex +1;
+     }
+     setContent(content_elem,next_line_number,startIndex,endIndex)
+   }
+   function setContent(content_elem,next_line_number,startIndex,endIndex){
+    var xhr = new XMLHttpRequest();
+     xhr.onreadystatechange = function() {
+       if (xhr.readyState == 4 && xhr.status == 200) {
+           content_elem.setAttribute("data-line-number",next_line_number);
+           var json = JSON.parse(xhr.responseText);
+           var content = json["Content"];
+           var highlight =json["Highlight"];
+            for (i = 0, len = content.length; i < len; i++) {
+                var node = document.createElement("PRE");
+                node.innerHTML = content[i];
+                if(highlight[i]){
+                    node.style.color = "blue";
+                }
+                node.style.margin = 0;
+                //appendbefore for size<0
+                if(i ==0 && next_line_number<=startIndex){
+                    content_elem.insertBefore(node, content_elem.firstChild);
+                }
+                else{
+                    content_elem.appendChild(node);
+                }
+            }
+       }
+     }
+     var formData = new FormData();
+     formData.append("StartIndex",startIndex);
+     formData.append("EndIndex",endIndex);
+     xhr.open("POST", "/report/events/details", true);
+     try { xhr.send(formData); } catch (err) {}
+   }
+   function expand(elem){
+	elem.classList.toggle("active");
+    var content = elem.nextElementSibling;
+    if (content.style.display === "block") {
+      content.style.display = "none";
+      var name = elem.innerHTML
+      elem.innerHTML = name.replace(name.charAt(0), "+");
+    } else {
+      content.style.display = "block";
+      var name = elem.innerHTML
+      elem.innerHTML = name.replace(name.charAt(0), "-");
+    }
+
+}
+   
+  </script>
 </head>
 <body>
-    <div class="header">
-        <a  class="logo">Log Parser</a>
-        <div class="header-right">
-         <a class="settings">Settings</a>
-         <div class = "settings-content">
+   <div class="header">
+     <a  class="logo">Log Parser</a>
+     <div class="header-right">
+        <a class="settings">Settings</a>
+        <div class = "settings-content">
           <a href="UploadConfig" >Upload Config</a>
           <a href="deleteConfig">Delete Config</a>
           <a href="editConfig">EditConfig</a>
-         </div>
         </div>
     </div>
-
-    <div>
-        {{ range $index, $ev := .Events }}
-            <a class = "details"  href="report/events/{{$ev}}">{{$ev}}</a>
-            <br>
-            <br>
-        {{end}}
-    </div>
-    
+   </div>
+  <div>
+    {{range $ind,$line := .MatchLines}}
+        {{$ev := index $.Events $line}}
+        <a class="event" onClick="expand(this)">+ {{$ev}}</a>
+        <div class = "details">
+          <div class = "banner_before">
+            <span id  = "main" onClick="expandContent(this)"> -5</span>
+            <span onClick="expandContent(this)"> -10</span>
+            <span onClick="expandContent(this)"> -50</span > 
+            <span onClick="expandContent(this)">All</span>
+            <span onClick="expandContent(this)">Block</span>
+          </div>
+          <div data-line-number = {{$line}}>
+          </div>
+        <div class = "banner_after">
+            <span id  = "main" onClick="expandContent(this)"> +5</span>
+            <span onClick="expandContent(this)"> +10</span>
+            <span onClick="expandContent(this)"> +50</span > 
+            <span onClick="expandContent(this)">All</span>
+            <span onClick="expandContent(this)">Block</span>
+        </div>
+        <div data-line-number = {{$line}}>
+        </div>
+        </div>
+        <br>
+        <br>
+    {{end}}   
+ </div>
 </body>
 </html>
+

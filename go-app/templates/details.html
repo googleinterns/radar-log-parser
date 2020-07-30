@@ -52,8 +52,6 @@ select {
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function() {
       if (xhr.readyState == 4 && xhr.status == 200) {
-        console.log("response est"); 
-        console.log(xhr.responseText); 
         document.getElementById("fContent").innerHTML =xhr.responseText;
       }
     }

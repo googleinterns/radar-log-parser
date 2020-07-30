@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"radar-log-parser/go-app/report"
 	"radar-log-parser/go-app/settings"
 	"radar-log-parser/go-app/utilities"
+	"strconv"
 	"strings"
 )
 
@@ -102,13 +105,14 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch page {
+	case "report/events/details":
+		loadEventDetails(w, r)
 	case "loglevel":
 		loadLogLevel(w, r)
 	case "UploadConfig":
 		loadUploadConfig(w, r)
 	case "editConfig":
 		loadEditConfig(w, r)
-
 	case "deleteConfig":
 		loadDeleteConfig(w, r)
 	default:
@@ -171,4 +175,64 @@ func loadAnalyseLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reportTempl.Execute(w, report.FullLogDetails.Analysis_details)
+}
+func loadEventDetails(w http.ResponseWriter, r *http.Request) {
+	r.ParseMultipartForm(10 << 20)
+	startIndex, _ := strconv.Atoi(r.FormValue("StartIndex"))
+	endIndex, _ := strconv.Atoi(r.FormValue("EndIndex"))
+	logs := strings.Split(report.FullLogDetails.Analysis_details.RawLog, "\n")
+	type Reponse struct {
+		Content   []string
+		Highlight map[int]bool //index=> true = must be highlight
+	}
+	event_content := []string{}
+	highlight := map[int]bool{}
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	if endIndex > len(logs) {
+		endIndex = len(logs)
+	}
+	event_content = fillEventDetails(startIndex, endIndex, logs, event_content, highlight)
+	resp := Reponse{
+		Content:   event_content,
+		Highlight: highlight,
+	}
+	jsonValue, _ := json.Marshal(resp)
+	w.Write(jsonValue)
+
+}
+func fillEventDetails(startIndex int, endIndex int, logs []string, event_content []string, highlight map[int]bool) []string {
+	last_index := startIndex
+	for _, index := range report.OrderedEventsLine {
+		if index < startIndex {
+			log.Println("case1", index)
+			log.Println("logs[index]", logs[index])
+			continue
+		}
+		if index <= endIndex {
+			content_slice := logs[last_index:index]
+			event_content = append(event_content, strings.Join(content_slice, "\n"))
+			highlight[len(event_content)-1] = false
+			event_content = append(event_content, logs[index])
+			highlight[len(event_content)-1] = true
+			last_index = index + 1
+			log.Println("case2", index)
+			log.Println("logs[index]", logs[index])
+		} else {
+			content_slice := logs[last_index : endIndex+1]
+			event_content = append(event_content, strings.Join(content_slice, "\n"))
+			highlight[len(event_content)-1] = false
+			last_index = endIndex + 1
+			log.Println("case3", index)
+			log.Println("logs[index]", logs[index])
+			break
+		}
+	}
+	if last_index <= endIndex {
+		content_slice := logs[last_index : endIndex+1]
+		event_content = append(event_content, strings.Join(content_slice, "\n"))
+		highlight[len(event_content)-1] = false
+	}
+	return event_content
 }
