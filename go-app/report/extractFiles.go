@@ -14,16 +14,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func extractConfig(cfgName string, bucket string) (*Config, error) {
+func extractConfig(cfgName string, bucket string, cfgFile *Config) error {
 	cfg_data, err := utilities.DownloadFile(nil, bucket, cfgName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	cfg := &ConfigInterface{}
 	if err := yaml.Unmarshal(cfg_data, cfg); err != nil {
-		return nil, err
+		return err
 	}
-	cfgFile := Config{}
 	cfgFile.IssuesGeneralFields.Details = cfg.IssuesGeneralFields.Details
 	cfgFile.IssuesGeneralFields.Log_level = cfg.IssuesGeneralFields.Log_level
 	cfgFile.IssuesGeneralFields.Number = cfg.IssuesGeneralFields.Number
@@ -34,9 +33,9 @@ func extractConfig(cfgName string, bucket string) (*Config, error) {
 	cfgFile.ImportantEvents = cfg.ImportantEvents
 	cfgFile.Issues = make(map[string]Issue)
 	for issue_name, _ := range cfg.Issues {
-		cfgFile.Issues[issue_name] = extract_issues_content(cfg.Issues[issue_name])	
+		cfgFile.Issues[issue_name] = extract_issues_content(cfg.Issues[issue_name])
 	}
-	return &cfgFile, nil
+	return nil
 }
 func extract_issues_content(issue interface{}) Issue {
 	myIssues := Issue{}

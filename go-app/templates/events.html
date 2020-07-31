@@ -41,12 +41,13 @@
         content_elem.style.display = "block";
      }
      var line_number = parseInt(content_elem.getAttribute("data-line-number"));
-     if(line_number<0 || line_number>=Math.pow(2, 52)){
+     var full_size = parseInt(content_elem.getAttribute("data-full-size"));
+     if(line_number<0 || line_number>full_size){
          return;
      }
      var size;
      if(expand_number == "All"){
-        size =  Math.pow(2, 52) ;
+        size =  full_size;
         if(element.parentNode.getAttribute("class")=="banner_before"){
             size = -size;
         }
@@ -77,6 +78,7 @@
            var json = JSON.parse(xhr.responseText);
            var content = json["Content"];
            var highlight =json["Highlight"];
+
             for (i = 0, len = content.length; i < len; i++) {
                 var node = document.createElement("PRE");
                 node.innerHTML = content[i];
@@ -84,9 +86,13 @@
                     node.style.color = "blue";
                 }
                 node.style.margin = 0;
-                //appendbefore for size<0
-                if(i ==0 && next_line_number<=startIndex){
-                    content_elem.insertBefore(node, content_elem.firstChild);
+                if(next_line_number<=startIndex){
+                    if(i==0){
+                        content_elem.insertBefore(node, content_elem.firstChild);
+                    }
+                    else{
+                        insertAfter(node, content_elem.children[i-1]);
+                    }      
                 }
                 else{
                     content_elem.appendChild(node);
@@ -99,6 +105,9 @@
      formData.append("EndIndex",endIndex);
      xhr.open("POST", "/report/events/details", true);
      try { xhr.send(formData); } catch (err) {}
+   }
+   function insertAfter(newNode, referenceNode) {
+      referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
    }
    function expand(elem){
 	elem.classList.toggle("active");
@@ -132,6 +141,7 @@
   <div>
     {{range $ind,$line := .MatchLines}}
         {{$ev := index $.Events $line}}
+        {{$size := $.LogSize}}
         <a class="event" onClick="expand(this)">+ {{$ev}}</a>
         <div class = "details">
           <div class = "banner_before">
@@ -141,7 +151,7 @@
             <span onClick="expandContent(this)">All</span>
             <span onClick="expandContent(this)">Block</span>
           </div>
-          <div data-line-number = {{$line}}>
+          <div data-line-number = {{$line}} data-full-size = {{$size}}>
           </div>
         <div class = "banner_after">
             <span id  = "main" onClick="expandContent(this)"> +5</span>
@@ -150,7 +160,7 @@
             <span onClick="expandContent(this)">All</span>
             <span onClick="expandContent(this)">Block</span>
         </div>
-        <div data-line-number = {{$line}}>
+        <div data-line-number = {{$line}} data-full-size = {{$size}}>
         </div>
         </div>
         <br>
