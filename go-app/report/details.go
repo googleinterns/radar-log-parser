@@ -150,7 +150,7 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 		contentMap[line] = index
 	}
 	var waitGroup sync.WaitGroup
-	var mutex sync.Mutex 
+	var mutex sync.Mutex
 	waitGroup.Add(len(cfgFile.ImportantEvents))
 	for ev, ev_rgx := range cfgFile.ImportantEvents {
 		go func(ev string, ev_rgx string) {
@@ -159,11 +159,13 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 				waitGroup.Done()
 				return
 			}
-			ev_content := ev_rgx_comp.FindString(fContent)
-			if ev_content != "" {
-				mutex.Lock() 
-				importantEvents[contentMap[ev_content]] = ev
-				mutex.Unlock() 
+			ev_content := ev_rgx_comp.FindAllString(fContent, -1)
+			if len(ev_content) > 0 {
+				mutex.Lock()
+				for _, match_ev := range ev_content {
+					importantEvents[contentMap[match_ev]] = ev
+				}
+				mutex.Unlock()
 			}
 			waitGroup.Done()
 		}(ev, ev_rgx)
