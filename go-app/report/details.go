@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
@@ -163,7 +164,7 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 	for index, line := range contentSlice {
 		contentMap[line] = index
 	}
-	/*var waitGroup sync.WaitGroup
+	var waitGroup sync.WaitGroup
 	var mutex sync.Mutex
 	waitGroup.Add(len(cfgFile.ImportantEvents))
 	for ev, ev_rgx := range cfgFile.ImportantEvents {
@@ -182,17 +183,7 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 			waitGroup.Done()
 		}(ev, ev_rgx)
 	}
-	waitGroup.Wait()*/
-	for ev, ev_rgx := range cfgFile.ImportantEvents {
-		ev_rgx_comp, err := regexp.Compile(ev_rgx)
-		if err != nil {
-			continue
-		}
-		ev_content := ev_rgx_comp.FindString(fContent)
-		if ev_content != "" {
-			importantEvents[contentMap[ev_content]] = ev
-		}
-	}
+	waitGroup.Wait()
 	return len(contentSlice)
 }
 func GetLogLeveldetails(platform string, level string, fContent string) string {

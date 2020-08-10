@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Config struct {
@@ -122,7 +123,7 @@ func fillHeader(headerMap map[string]bool) []string {
 	return header
 }
 func setSpecProcessLogs(cfgFile *Config, fContent string, spec_proc_map map[string]string) {
-	/*var waitGroup sync.WaitGroup
+	var waitGroup sync.WaitGroup
 	var mutex sync.Mutex
 	waitGroup.Add(len(cfgFile.SpecificProcess))
 	for proc, proc_rgx := range cfgFile.SpecificProcess {
@@ -141,21 +142,11 @@ func setSpecProcessLogs(cfgFile *Config, fContent string, spec_proc_map map[stri
 			waitGroup.Done()
 		}(proc, proc_rgx)
 	}
-	waitGroup.Wait()*/
-	for proc, proc_rgx := range cfgFile.SpecificProcess {
-		proc_rgx_comp, err := regexp.Compile(proc_rgx)
-		if err != nil {
-			continue
-		}
-		proc_content := proc_rgx_comp.FindAllString(fContent, -1)
-		if len(proc_content) > 1 {
-			spec_proc_map[proc] = strings.Join(proc_content, "\n")
-		}
-	}
+	waitGroup.Wait()
 
 }
 func getIssueDetails(cfgFile *Config, fContent string, headerMap map[string]bool, issues_map map[string]map[string]string, spec_proc_map map[string]string, grp_issues map[string]GroupedStruct, ngrp_issues map[string]map[string]bool) {
-	/*specific_proc_content := make(map[string]string)
+	specific_proc_content := make(map[string]string)
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
 	var map_mutex sync.Mutex
@@ -204,43 +195,7 @@ func getIssueDetails(cfgFile *Config, fContent string, headerMap map[string]bool
 			wg.Done()
 		}(issue_name, issue)
 	}
-	wg.Wait()*/
-
-	specific_proc_content := make(map[string]string)
-	for issue_name, issue := range cfgFile.Issues {
-		issues_map[issue_name] = make(map[string]string)
-		//Filter the logs belonging to the issue specific process
-		issueContent := ""
-		for proc, proc_rgx := range issue.specific_process {
-			proc_issue, ok := spec_proc_map[proc]
-			if !ok {
-				proc_issue, ok := specific_proc_content[proc]
-				if !ok {
-					proc_rgx_comp, err := regexp.Compile(proc_rgx)
-					if err != nil {
-						continue
-					}
-					raw_proc_issue := proc_rgx_comp.FindAllString(fContent, -1)
-					proc_issue = strings.Join(raw_proc_issue, "\n")
-					specific_proc_content[proc] = proc_issue
-				}
-			}
-			issueContent += proc_issue
-			issueContent += "\n"
-		}
-
-		if issue.detailing_mode == "group" {
-			groupedDetails := GroupedStruct{}
-			groupedDetails.Group_content = make(map[string][][]string)
-			groupedDetails.Group_count = make(map[string][]int)
-			groupedDetails.Group_names = []string{}
-			groupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name, issues_map, groupedDetails.Group_content, groupedDetails.Group_count, &groupedDetails.Group_names)
-			grp_issues[issue_name] = groupedDetails
-		} else {
-			nongroupIssueDetails(issue, cfgFile, headerMap, issueContent, issue_name, issues_map, ngrp_issues)
-		}
-
-	}
+	wg.Wait()
 }
 func groupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]bool, issueContent string, issue_name string, issues_map map[string]map[string]string, group_content map[string][][]string, group_count map[string][]int, group_names *[]string) {
 	group_rgx, err := regexp.Compile(issue.grouping)
