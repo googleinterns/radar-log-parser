@@ -37,6 +37,7 @@ func extractConfig(cfgName string, bucket string, cfgFile *Config) error {
 	}
 	return nil
 }
+
 func extract_issues_content(issue interface{}) Issue {
 	myIssues := Issue{}
 	myIssues.specific_process = make(map[string]string)
@@ -69,7 +70,7 @@ func extract_issues_content(issue interface{}) Issue {
 func uploadLogFile(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (string, *string, string, string, error) {
 	r.ParseMultipartForm(10 << 20)
 	cfg_file := r.FormValue("selectedFile")
-	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
+	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/")
 	if err != nil {
 		return "", nil, cfg_file, "", err
 	}

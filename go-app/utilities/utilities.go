@@ -33,6 +33,12 @@ func DownloadFile(w io.Writer, bucket, object string) ([]byte, error) {
 		return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
 	}
 	return data, nil
+	/*data, err := ioutil.ReadFile("./config_events.yml")
+	  if err != nil {
+	  	return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
+	  }
+	  return data, nil*/
+
 }
 func GetBuckets(project_id string) ([]string, error) {
 	ctx := context.Background()

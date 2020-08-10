@@ -13,14 +13,14 @@
   <div class="header-right">
    <a class="settings">Settings</a>
    <div class = "settings-content">
-    <a href="UploadConfig" >Upload Config</a>
-    <a href="deleteConfig">Delete Config</a>
-    <a href="editConfig">EditConfig</a>
+    <a href="/UploadConfig" >Upload Config</a>
+    <a href="/deleteConfig">Delete Config</a>
+    <a href="/editConfig">EditConfig</a>
    </div>
   </div>
 </div>
 <div class = "uploadTab">
-	<form method="POST" enctype="multipart/form-data">
+	<form method="POST" enctype="multipart/form-data" action="/report">
        <label id = "log_file_upload" for="log_file" >Log file:</label>
        <input type="file" id="log_file" name="myFile" accept=".txt,.gz" required ><br><br> 
       <label id = "config_file_upload" for="bucket" >Log format:</label>
@@ -35,9 +35,7 @@
         {{end}}
       </select><br><br>
        <input type="submit" value = "Analyze" >
-   </form>
-    
+   </form>    
 </div>
-
 </body>
 </html>

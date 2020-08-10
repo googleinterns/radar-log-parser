@@ -1,13 +1,13 @@
 package report
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 var (
@@ -21,25 +21,39 @@ var (
 
 func LogReport(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails, cfgFile *Config) {
 	file := r.URL.Path[len("/report/"):]
-	switch file {
-	case fullLogDetails.Analysis_details.FileName:
+	reportType := getReportType(file, fullLogDetails)
+	switch reportType {
+	case "Rawlog":
 		loadRawLog(w, r, fullLogDetails)
-	case "events":
+	case "SpecificProcess":
+		loadSpecificLogs(w, file, fullLogDetails)
+	case "Events":
 		loadEvents(w, r, fullLogDetails, cfgFile)
-	default:
-		if file[:7] == "Details" {
-			issue_name := r.URL.Path[len("/report/Details/"):]
-			_, ok := fullLogDetails.GroupedIssues[issue_name]
-			if ok {
-				loadGroupDetails(w, issue_name, fullLogDetails)
-			} else {
-				loadNonGroupDetails(w, issue_name, fullLogDetails)
-			}
+	case "Details":
+		issue_name := r.URL.Path[len("/report/Details/"):]
+		_, ok := fullLogDetails.GroupedIssues[issue_name]
+		if ok {
+			loadGroupDetails(w, issue_name, fullLogDetails)
 		} else {
-			loadSpecificLogs(w, file, fullLogDetails)
+			loadNonGroupDetails(w, issue_name, fullLogDetails)
 		}
-	}
+	default:
 
+	}
+}
+func getReportType(s string, fullLogDetails *FullDetails) string {
+	_, ok := fullLogDetails.Analysis_details.SpecificProcess[s]
+	if ok {
+		return "SpecificProcess"
+	} else if s == fullLogDetails.Analysis_details.FileName {
+		return "Rawlog"
+	} else if s == "events" {
+		return "Events"
+	} else if strings.Contains(s, "Details") {
+		return "Details"
+	} else {
+		return ""
+	}
 }
 func loadSpecificLogs(w http.ResponseWriter, file string, fullLogDetails *FullDetails) {
 	FuncMap := template.FuncMap{
@@ -149,8 +163,8 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 	for index, line := range contentSlice {
 		contentMap[line] = index
 	}
-	var waitGroup sync.WaitGroup
-	var mutex sync.Mutex 
+	/*var waitGroup sync.WaitGroup
+	var mutex sync.Mutex
 	waitGroup.Add(len(cfgFile.ImportantEvents))
 	for ev, ev_rgx := range cfgFile.ImportantEvents {
 		go func(ev string, ev_rgx string) {
@@ -161,14 +175,24 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 			}
 			ev_content := ev_rgx_comp.FindString(fContent)
 			if ev_content != "" {
-				mutex.Lock() 
+				mutex.Lock()
 				importantEvents[contentMap[ev_content]] = ev
-				mutex.Unlock() 
+				mutex.Unlock()
 			}
 			waitGroup.Done()
 		}(ev, ev_rgx)
 	}
-	waitGroup.Wait()
+	waitGroup.Wait()*/
+	for ev, ev_rgx := range cfgFile.ImportantEvents {
+		ev_rgx_comp, err := regexp.Compile(ev_rgx)
+		if err != nil {
+			continue
+		}
+		ev_content := ev_rgx_comp.FindString(fContent)
+		if ev_content != "" {
+			importantEvents[contentMap[ev_content]] = ev
+		}
+	}
 	return len(contentSlice)
 }
 func GetLogLeveldetails(platform string, level string, fContent string) string {
@@ -178,4 +202,62 @@ func GetLogLeveldetails(platform string, level string, fContent string) string {
 		return ""
 	}
 	return strings.Join(lev_rgx_comp.FindAllString(fContent, -1), "\n")
+}
+func LoadEventDetails(w http.ResponseWriter, r *http.Request, rawlog string, importantEvents map[int]string) {
+	r.ParseMultipartForm(10 << 20)
+	startIndex, _ := strconv.Atoi(r.FormValue("StartIndex"))
+	endIndex, _ := strconv.Atoi(r.FormValue("EndIndex"))
+	logs := strings.Split(rawlog, "\n")
+	type Reponse struct {
+		Content   []string
+		Highlight map[int]bool //index=> true = must be highlight
+	}
+	event_content := []string{}
+	highlight := map[int]bool{}
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	if endIndex > len(logs) {
+		endIndex = len(logs)
+	}
+	event_content = fillEventDetails(startIndex, endIndex, logs, event_content, highlight, importantEvents)
+	resp := Reponse{
+		Content:   event_content,
+		Highlight: highlight,
+	}
+	jsonValue, _ := json.Marshal(resp)
+	w.Write(jsonValue)
+}
+func fillEventDetails(startIndex int, endIndex int, logs []string, event_content []string, highlight map[int]bool, importantEvents map[int]string) []string {
+	order_ev_lines := make([]int, 0, len(importantEvents))
+	for line, _ := range importantEvents {
+		order_ev_lines = append(order_ev_lines, line)
+	}
+	sort.Ints(order_ev_lines)
+	last_index := startIndex
+	for _, index := range order_ev_lines {
+		if index < startIndex {
+			continue
+		}
+		if index <= endIndex {
+			content_slice := logs[last_index:index]
+			event_content = append(event_content, strings.Join(content_slice, "\n"))
+			highlight[len(event_content)-1] = false
+			event_content = append(event_content, logs[index])
+			highlight[len(event_content)-1] = true
+			last_index = index + 1
+		} else {
+			content_slice := logs[last_index : endIndex+1]
+			event_content = append(event_content, strings.Join(content_slice, "\n"))
+			highlight[len(event_content)-1] = false
+			last_index = endIndex + 1
+			break
+		}
+	}
+	if last_index <= endIndex {
+		content_slice := logs[last_index : endIndex+1]
+		event_content = append(event_content, strings.Join(content_slice, "\n"))
+		highlight[len(event_content)-1] = false
+	}
+	return event_content
 }
