@@ -16,8 +16,9 @@ type Feedback struct {
 }
 
 var (
-	feedBack = Feedback{}
-	CfgFile  = report.Config{}
+	feedBack       = Feedback{}
+	fullLogDetails = report.FullDetails{}
+	cfg_file       = report.Config{}
 )
 
 var (
@@ -35,7 +36,6 @@ var (
 	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com"}
 ) //TODO: Put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
-
 var (
 	cfg_edit    string
 	bucket_edit string
@@ -47,9 +47,15 @@ func main() {
 	fs := http.FileServer(http.Dir("assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", fs))
 	mux.HandleFunc("/", homeHandler)
+	mux.HandleFunc("/UploadConfig", uploadCfgHandler)
+	mux.HandleFunc("/editConfig", editCfgHandler)
+	mux.HandleFunc("/deleteConfig", deleteCfgHandler)
+	mux.HandleFunc("/report", reportHandler)
+	mux.HandleFunc("/report/", reportHandler)
 	fillConfigMap()
 	http.ListenAndServe(":"+port, mux)
 }
+
 func fillConfigMap() {
 	buckets, err := utilities.GetBuckets(project_id)
 	if err != nil {
@@ -82,31 +88,29 @@ func getFeedBack(err error, content string) {
 	}
 }
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	page := r.URL.Path[len("/"):]
 	if r.Method != http.MethodPost {
-		if len(page) > 5 {
-			if strings.Contains(page, "UploadConfig") {
-				bucketList := make([]string, 0, len(cloudConfigs))
-				for k := range cloudConfigs {
-					bucketList = append(bucketList, k)
-				}
-				upload_configTempl.Execute(w, bucketList)
-			} else if strings.Contains(page, "analyzeLog") {
-				homeTempl.Execute(w, cloudConfigs)
-			} else if strings.Contains(page, "editConfig") {
-				edit_config_homeTempl.Execute(w, cloudConfigs)
-			} else if strings.Contains(page, "deleteConfig") {
-				delete_configTempl.Execute(w, cloudConfigs)
-			} else {
-				report.LogReport(w, r, report.FullLogDetails)
-			}
-		} else {
-			homeTempl.Execute(w, cloudConfigs)
-		}
-		return
+		homeTempl.Execute(w, cloudConfigs)
+	} else {
+		loadLogLevel(w, r, fullLogDetails.Analysis_details.Platform, fullLogDetails.Analysis_details.RawLog)
 	}
-	switch page {
-	case "UploadConfig":
+}
+func fillUploadCfgPage(w http.ResponseWriter, r *http.Request) {
+	bucketList := make([]string, 0, len(cloudConfigs))
+	for k := range cloudConfigs {
+		bucketList = append(bucketList, k)
+	}
+	upload_configTempl.Execute(w, bucketList)
+}
+func loadLogLevel(w http.ResponseWriter, r *http.Request, platform string, rawlog string) {
+	r.ParseMultipartForm(10 << 20)
+	level := r.FormValue("selectedLevel")
+	logContent := report.GetLogLeveldetails(platform, level, rawlog)
+	w.Write([]byte(logContent))
+}
+func uploadCfgHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		fillUploadCfgPage(w, r)
+	} else {
 		configs, err := settings.UploadConfigFile(r, project_id, cloudConfigs)
 		getFeedBack(err, "Upload Config")
 		if err == nil {
@@ -114,7 +118,12 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		cloudConfigs = configs
 		feedbackTempl.Execute(w, feedBack)
-	case "editConfig":
+	}
+}
+func editCfgHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		edit_config_homeTempl.Execute(w, cloudConfigs)
+	} else {
 		if r.FormValue("action") == "Save" {
 			err := settings.SaveConfig(r, bucket_edit, cfg_edit)
 			getFeedBack(err, "Edit Config")
@@ -130,22 +139,40 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			edit_configTempl.Execute(w, content)
 		}
-
-	case "deleteConfig":
+	}
+}
+func deleteCfgHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		delete_configTempl.Execute(w, cloudConfigs)
+	} else {
 		configs, err := settings.DeleteConfig(r, project_id, region_id, cloudConfigs)
 		getFeedBack(err, "Delete Config")
 		if err == nil {
 			cloudConfigs = configs
 		}
 		feedbackTempl.Execute(w, feedBack)
-	default:
-		err := report.AnalyseLog(w, r, project_id, region_id)
-		if err != nil {
-			getFeedBack(err, "Delete Config")
-			feedbackTempl.Execute(w, feedBack)
-			return
-		}
-		reportTempl.Execute(w, report.FullLogDetails.Analysis_details)
 	}
+}
 
+func loadAnalyseLog(w http.ResponseWriter, r *http.Request, fullDetails *report.FullDetails, conf_file *report.Config) {
+	err := report.AnalyseLog(w, r, project_id, region_id, fullDetails, conf_file)
+	if err != nil {
+		getFeedBack(err, "Log Analysis Error")
+		feedbackTempl.Execute(w, feedBack)
+		return
+	}
+	reportTempl.Execute(w, fullLogDetails.Analysis_details)
+}
+
+func reportHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		report.LogReport(w, r, &fullLogDetails, &cfg_file)
+	} else {
+		page := r.URL.Path[len("/report"):]
+		if strings.Contains(page, "/events/details") {
+			report.LoadEventDetails(w, r, fullLogDetails.Analysis_details.RawLog, fullLogDetails.ImportantEvents)
+		} else {
+			loadAnalyseLog(w, r, &fullLogDetails, &cfg_file)
+		}
+	}
 }

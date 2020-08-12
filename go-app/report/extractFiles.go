@@ -14,16 +14,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func extractConfig(cfgName string, bucket string) (*Config, error) {
+func extractConfig(cfgName string, bucket string, cfgFile *Config) error {
 	cfg_data, err := utilities.DownloadFile(nil, bucket, cfgName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	cfg := &ConfigInterface{}
 	if err := yaml.Unmarshal(cfg_data, cfg); err != nil {
-		return nil, err
+		return err
 	}
-	cfgFile := Config{}
 	cfgFile.IssuesGeneralFields.Details = cfg.IssuesGeneralFields.Details
 	cfgFile.IssuesGeneralFields.Log_level = cfg.IssuesGeneralFields.Log_level
 	cfgFile.IssuesGeneralFields.Number = cfg.IssuesGeneralFields.Number
@@ -34,40 +33,44 @@ func extractConfig(cfgName string, bucket string) (*Config, error) {
 	cfgFile.ImportantEvents = cfg.ImportantEvents
 	cfgFile.Issues = make(map[string]Issue)
 	for issue_name, _ := range cfg.Issues {
-		myIssues := Issue{}
-		myIssues.specific_process = make(map[string]string)
-		myIssues.additional_fields = make(map[string]string)
-		for issue_key, issue_value := range cfg.Issues[issue_name].(map[interface{}]interface{}) {
-			switch issue_value.(type) {
-			case string:
-				switch issue_key {
-				case "regex":
-					myIssues.regex = issue_value.(string)
-				case "detailing_mode":
-					myIssues.detailing_mode = issue_value.(string)
-				case "grouping":
-					myIssues.grouping = issue_value.(string)
-				}
-
-			case map[interface{}]interface{}:
-				for name, value := range issue_value.(map[interface{}]interface{}) {
-					if issue_key == "specific_process" {
-						myIssues.specific_process[name.(string)] = value.(string)
-					} else {
-						myIssues.additional_fields[name.(string)] = value.(string)
-					}
-				}
-			case interface{}:
-			}
-		}
-		cfgFile.Issues[issue_name] = myIssues
+		cfgFile.Issues[issue_name] = extract_issues_content(cfg.Issues[issue_name])
 	}
-	return &cfgFile, nil
+	return nil
+}
+
+func extract_issues_content(issue interface{}) Issue {
+	myIssues := Issue{}
+	myIssues.specific_process = make(map[string]string)
+	myIssues.additional_fields = make(map[string]string)
+	for issue_key, issue_value := range issue.(map[interface{}]interface{}) {
+		switch issue_value.(type) {
+		case string:
+			switch issue_key {
+			case "regex":
+				myIssues.regex = issue_value.(string)
+			case "detailing_mode":
+				myIssues.detailing_mode = issue_value.(string)
+			case "grouping":
+				myIssues.grouping = issue_value.(string)
+			}
+
+		case map[interface{}]interface{}:
+			for name, value := range issue_value.(map[interface{}]interface{}) {
+				if issue_key == "specific_process" {
+					myIssues.specific_process[name.(string)] = value.(string)
+				} else {
+					myIssues.additional_fields[name.(string)] = value.(string)
+				}
+			}
+		case interface{}:
+		}
+	}
+	return myIssues
 }
 func uploadLogFile(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (string, *string, string, string, error) {
 	r.ParseMultipartForm(10 << 20)
 	cfg_file := r.FormValue("selectedFile")
-	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
+	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/")
 	if err != nil {
 		return "", nil, cfg_file, "", err
 	}
