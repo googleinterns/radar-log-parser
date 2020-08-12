@@ -209,7 +209,7 @@ func LoadEventDetails(w http.ResponseWriter, r *http.Request, rawlog string, imp
 		startIndex = 0
 	}
 	if endIndex > len(logs) {
-		endIndex = len(logs)
+		endIndex = len(logs) - 1
 	}
 	event_content = fillEventDetails(startIndex, endIndex, logs, event_content, highlight, importantEvents)
 	resp := Reponse{

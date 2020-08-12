@@ -43,7 +43,6 @@ var (
 
 func main() {
 	port := os.Getenv("PORT")
-	//port := "8080" //test
 	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir("assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", fs))

@@ -77,7 +77,8 @@
            var json = JSON.parse(xhr.responseText);
            var content = json["Content"];
            var highlight =json["Highlight"];
-
+            var details_node = document.createElement("DIV");
+            details_node.style.margin = 0;
             for (i = 0, len = content.length; i < len; i++) {
                 var node = document.createElement("PRE");
                 node.innerHTML = content[i];
@@ -85,18 +86,14 @@
                     node.style.color = "blue";
                 }
                 node.style.margin = 0;
-                if(next_line_number<=startIndex){
-                    if(i==0){
-                        content_elem.insertBefore(node, content_elem.firstChild);
-                    }
-                    else{
-                        insertAfter(node, content_elem.children[i-1]);
-                    }      
-                }
-                else{
-                    content_elem.appendChild(node);
-                }
+                details_node.appendChild(node);
             }
+            if(next_line_number<=startIndex){
+              content_elem.insertBefore(details_node, content_elem.firstChild);
+            }
+            else{
+              content_elem.appendChild(details_node);
+           }
        }
      }
      var formData = new FormData();
