@@ -84,16 +84,25 @@ func loadEvents(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDeta
 		ev_lines = append(ev_lines, line)
 	}
 	sort.Ints(ev_lines)
-	event_template, err := template.New("events.html").Funcs(template.FuncMap{}).ParseFiles("templates/events.html")
+	event_logs := make([]string, 0, len(fullLogDetails.ImportantEvents))
+	contentSlice := strings.Split(fullLogDetails.Analysis_details.RawLog, "\n")
+	for _, line := range ev_lines {
+		event_logs = append(event_logs, contentSlice[line])
+	}
+	event_template, err := template.New("events.html").Funcs(template.FuncMap{"add": func(x, y int) int {
+		return x + y
+	}}).ParseFiles("templates/events.html")
 	template := template.Must(event_template, err)
 	template.Execute(w, struct {
 		MatchLines []int
 		Events     map[int]string
 		LogSize    int
+		EventLogs  []string
 	}{
 		ev_lines,
 		fullLogDetails.ImportantEvents,
 		logs_size,
+		event_logs,
 	})
 }
 func loadRawLog(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails) {

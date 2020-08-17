@@ -8,7 +8,6 @@ import (
 	"radar-log-parser/go-app/report"
 	"radar-log-parser/go-app/settings"
 	"radar-log-parser/go-app/utilities"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -39,7 +38,6 @@ var (
 	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com"}
 ) //TODO: Put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
-
 var (
 	cfg_edit    string
 	bucket_edit string
@@ -183,55 +181,13 @@ func loadEventDetails(w http.ResponseWriter, r *http.Request, rawlog string) {
 	endIndex, _ := strconv.Atoi(r.FormValue("EndIndex"))
 	logs := strings.Split(rawlog, "\n")
 	type Reponse struct {
-		Content   []string
-		Highlight map[int]bool //index=> true = must be highlight
+		Content string
 	}
-	event_content := []string{}
-	highlight := map[int]bool{}
-	if startIndex < 0 {
-		startIndex = 0
-	}
-	if endIndex > len(logs) {
-		endIndex = len(logs)
-	}
-	event_content = fillEventDetails(startIndex, endIndex, logs, event_content, highlight)
+	content_slice := logs[startIndex : endIndex+1]
+	event_content := strings.Join(content_slice, "\n")
 	resp := Reponse{
-		Content:   event_content,
-		Highlight: highlight,
+		Content: event_content,
 	}
 	jsonValue, _ := json.Marshal(resp)
 	w.Write(jsonValue)
-}
-func fillEventDetails(startIndex int, endIndex int, logs []string, event_content []string, highlight map[int]bool) []string {
-	order_ev_lines := make([]int, 0, len(fullLogDetails.ImportantEvents))
-	for line, _ := range fullLogDetails.ImportantEvents {
-		order_ev_lines = append(order_ev_lines, line)
-	}
-	sort.Ints(order_ev_lines)
-	last_index := startIndex
-	for _, index := range order_ev_lines {
-		if index < startIndex {
-			continue
-		}
-		if index <= endIndex {
-			content_slice := logs[last_index:index]
-			event_content = append(event_content, strings.Join(content_slice, "\n"))
-			highlight[len(event_content)-1] = false
-			event_content = append(event_content, logs[index])
-			highlight[len(event_content)-1] = true
-			last_index = index + 1
-		} else {
-			content_slice := logs[last_index : endIndex+1]
-			event_content = append(event_content, strings.Join(content_slice, "\n"))
-			highlight[len(event_content)-1] = false
-			last_index = endIndex + 1
-			break
-		}
-	}
-	if last_index <= endIndex {
-		content_slice := logs[last_index : endIndex+1]
-		event_content = append(event_content, strings.Join(content_slice, "\n"))
-		highlight[len(event_content)-1] = false
-	}
-	return event_content
 }

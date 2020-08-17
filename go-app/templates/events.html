@@ -5,15 +5,14 @@
     <title> Radar-log-parser</title>
    <link rel="stylesheet" href="/assets/styles.css">
    <style>
-     .details{
-        display: none;
-     }
-    
      .banner_after,.banner_before{
         width:100%;
-        padding:0.5%;
-        background-color: gray;
-        margin-bottom: 0.5%;
+        padding:0.3%;
+        background-color:	#E8E8E8;
+        
+     }
+     .banner_after{
+       margin-bottom:1%;
      }
      span{
         cursor: pointer;
@@ -27,77 +26,61 @@
         cursor: pointer; 
         text-align: left;
         text-decoration: underline;
+        
+     }
+     .event_line{
+       color:blue;
+       margin-left:0;
+       font-size: 13.5px;
+     }
+     .content{
+        overflow-x: auto;
      }
   </style>
   <script> 
    function expandContent(element){
-     var content_elem = element.parentNode.nextElementSibling;
-     var expand_number = element.innerHTML;
-     if (expand_number == "Block"){
-        content_elem.style.display = "none";
-        return;
-     }
-     if (content_elem.style.display === "none") {
-        content_elem.style.display = "block";
-     }
-     var line_number = parseInt(content_elem.getAttribute("data-line-number"));
-     var full_size = parseInt(content_elem.getAttribute("data-full-size"));
-     if(line_number<0 || line_number>full_size){
-         return;
-     }
-     var size;
-     if(expand_number == "All"){
-        size =  full_size;
-        if(element.parentNode.getAttribute("class")=="banner_before"){
-            size = -size;
-        }
+     var expand_number ;
+     if(element.innerHTML == "All"){
+      expand_number = Math.pow(2,53);
      }
      else{
-       size = parseInt(expand_number);
+      var expand_content = element.innerHTML;
+      expand_number = parseInt(expand_content.replace(/ /g, ''));
      }
-     var startIndex;
-     var endIndex ;
-     var next_line_number;
-     if(size<0) {
-        startIndex = line_number+size;
-        endIndex = line_number;
-        next_line_number = startIndex -1;
+     if (element.parentNode.getAttribute("class")=="banner_after"){
+       expandAfterContent(element,expand_number);
      }
      else{
-        startIndex = line_number;
-        endIndex = line_number+size;
-        next_line_number = endIndex +1;
-     }
-     setContent(content_elem,next_line_number,startIndex,endIndex)
+       expandBeforeContent(element,expand_number);
+     } 
    }
-   function setContent(content_elem,next_line_number,startIndex,endIndex){
+   function setContent(content_elem,banner_elem,concurrent_banner,startIndex,endIndex,merge,banner_after){
     var xhr = new XMLHttpRequest();
      xhr.onreadystatechange = function() {
        if (xhr.readyState == 4 && xhr.status == 200) {
-           content_elem.setAttribute("data-line-number",next_line_number);
            var json = JSON.parse(xhr.responseText);
-           var content = json["Content"];
-           var highlight =json["Highlight"];
-
-            for (i = 0, len = content.length; i < len; i++) {
-                var node = document.createElement("PRE");
-                node.innerHTML = content[i];
-                if(highlight[i]){
-                    node.style.color = "blue";
-                }
-                node.style.margin = 0;
-                if(next_line_number<=startIndex){
-                    if(i==0){
-                        content_elem.insertBefore(node, content_elem.firstChild);
-                    }
-                    else{
-                        insertAfter(node, content_elem.children[i-1]);
-                    }      
-                }
-                else{
-                    content_elem.appendChild(node);
-                }
-            }
+           var content = json["Content"]; 
+           var details_node = document.createElement("DIV");
+           details_node.style.margin = 0;
+           var node= document.createElement("PRE");
+           node.style.margin = 0;
+           node.innerHTML = content;
+           details_node.appendChild(node);
+           if(!banner_after){
+             banner_elem.setAttribute("data-line-number",startIndex-1);
+             content_elem.insertBefore(details_node, content_elem.firstElementChild);
+           }
+           else{
+              banner_elem.setAttribute("data-line-number",endIndex+1);
+              content_elem.appendChild(details_node);
+           }
+           if(merge){
+              banner_elem.parentNode.removeChild(banner_elem);
+              if(concurrent_banner!=null){
+                concurrent_banner.parentNode.removeChild(concurrent_banner);
+              }    
+           }
+           
        }
      }
      var formData = new FormData();
@@ -106,24 +89,60 @@
      xhr.open("POST", "/report/events/details", true);
      try { xhr.send(formData); } catch (err) {}
    }
-   function insertAfter(newNode, referenceNode) {
-      referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
+   function expandAfterContent(element,expand_number){
+     var content_elem,concurrent_banner,start,end,merge;
+     var banner_elem = element.parentNode;
+     content_elem = banner_elem.previousElementSibling;
+     var line_number = parseInt(banner_elem.getAttribute("data-line-number"));
+     start = line_number;
+     if(banner_elem.parentNode.nextElementSibling == null){
+        end = parseInt(banner_elem.getAttribute("data-full-size"))-1;
+        merge = true;
+        if (expand_number != Math.pow(2,53) &&(line_number+expand_number-1<end)){
+          end = line_number+expand_number-1;
+          merge = false;
+        }
+     }
+     else{
+        concurrent_banner = banner_elem.parentNode.nextElementSibling.firstElementChild;
+        var concur_line_number = parseInt(concurrent_banner.getAttribute("data-line-number"));
+        if (expand_number == Math.pow(2,53) || (line_number+expand_number>concur_line_number+1)){
+          end = concur_line_number;
+          merge = true;
+        }
+        else {
+          end = line_number+expand_number-1;
+        }
+     }
+     setContent(content_elem,banner_elem,concurrent_banner,start,end,merge,true);
    }
-   function expand(elem){
-	elem.classList.toggle("active");
-    var content = elem.nextElementSibling;
-    if (content.style.display === "block") {
-      content.style.display = "none";
-      var name = elem.innerHTML
-      elem.innerHTML = name.replace(name.charAt(0), "+");
-    } else {
-      content.style.display = "block";
-      var name = elem.innerHTML
-      elem.innerHTML = name.replace(name.charAt(0), "-");
+   function expandBeforeContent(element,expand_number){
+     var content_elem,concurrent_banner,start,end,merge;
+     var banner_elem = element.parentNode;
+     content_elem = banner_elem.nextElementSibling;
+     var line_number = parseInt(banner_elem.getAttribute("data-line-number"));
+     end = line_number;
+     if(banner_elem.parentNode.previousElementSibling == null){
+       start = 0;
+       merge = true;
+       if (expand_number != Math.pow(2,53) && (line_number+expand_number+1>0)){
+         start = line_number+expand_number+1;
+         merge = false;
+       }
+     }
+     else{
+       concurrent_banner = banner_elem.parentNode.previousElementSibling.lastElementChild;
+       var concur_line_number = parseInt(concurrent_banner.getAttribute("data-line-number"));
+       if (expand_number == Math.pow(2,53) || (line_number+expand_number<concur_line_number-1)){
+         start = concur_line_number;
+         merge = true;
+       }
+       else {
+         start = line_number+expand_number+1;
+       } 
+      }
+     setContent(content_elem,banner_elem,concurrent_banner,start,end,merge,false);
     }
-
-}
-   
   </script>
 </head>
 <body>
@@ -138,33 +157,29 @@
         </div>
     </div>
    </div>
-  <div>
+  <div class = "content">
     {{range $ind,$line := .MatchLines}}
-        {{$ev := index $.Events $line}}
-        {{$size := $.LogSize}}
-        <a class="event" onClick="expand(this)">+ {{$ev}}</a>
-        <div class = "details">
-          <div class = "banner_before">
-            <span id  = "main" onClick="expandContent(this)"> -5</span>
-            <span onClick="expandContent(this)"> -10</span>
-            <span onClick="expandContent(this)"> -50</span > 
+       {{$ev := index $.Events $line}}
+       {{$ev_log := index $.EventLogs $ind}}
+       {{$size := $.LogSize}}
+       {{$line = add $line 1}}
+       <div class = "details">
+          <div class = "banner_before" data-line-number = {{$line}}>
+            <span id  = "main" onClick="expandContent(this)"> - 5</span>
+            <span onClick="expandContent(this)"> - 10</span>
+            <span onClick="expandContent(this)"> - 50</span > 
             <span onClick="expandContent(this)">All</span>
-            <span onClick="expandContent(this)">Block</span>
           </div>
-          <div data-line-number = {{$line}} data-full-size = {{$size}}>
-          </div>
-        <div class = "banner_after">
+          <div ></div>
+          <a class="event" > {{$ev}} :</a> <span class = "event_line">{{$ev_log}}</span>
+          <div ></div>
+          <div class = "banner_after" data-line-number = {{$line}}  data-full-size = {{$size}}>
             <span id  = "main" onClick="expandContent(this)"> +5</span>
             <span onClick="expandContent(this)"> +10</span>
             <span onClick="expandContent(this)"> +50</span > 
             <span onClick="expandContent(this)">All</span>
-            <span onClick="expandContent(this)">Block</span>
+          </div>
         </div>
-        <div data-line-number = {{$line}} data-full-size = {{$size}}>
-        </div>
-        </div>
-        <br>
-        <br>
     {{end}}   
  </div>
 </body>
