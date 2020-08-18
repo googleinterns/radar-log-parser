@@ -9,10 +9,10 @@
         width:100%;
         padding:0.3%;
         background-color:	#E8E8E8;
-        
+        display: none;  
      }
      .banner_after{
-       margin-bottom:1%;
+       margin-bottom:0.2%;
      }
      span{
         cursor: pointer;
@@ -38,6 +38,19 @@
      }
   </style>
   <script> 
+  function expand(elem){
+    var name = elem.innerHTML;
+    if (name.charAt(0) == "+"){
+    	elem.innerHTML = name.replace(name.charAt(0), "");
+      var siblings = elem.parentNode.children;
+      if(siblings[0].getAttribute("class")==="banner_before"){
+        siblings[0].style.display = "block";
+      }
+      if (siblings[siblings.length-1].getAttribute("class")==="banner_after"){
+        siblings[siblings.length-1].style.display = "block";
+      }  
+    }
+  }
    function expandContent(element){
      var expand_number ;
      if(element.innerHTML == "All"){
@@ -171,7 +184,7 @@
             <span onClick="expandContent(this)">All</span>
           </div>
           <div ></div>
-          <a class="event" > {{$ev}} :</a> <span class = "event_line">{{$ev_log}}</span>
+          <a class="event" onClick="expand(this)">+{{$ev}} :</a> <span class = "event_line">{{$ev_log}}</span>
           <div ></div>
           <div class = "banner_after" data-line-number = {{$line}}  data-full-size = {{$size}}>
             <span id  = "main" onClick="expandContent(this)"> +5</span>
