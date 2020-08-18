@@ -175,9 +175,10 @@
        {{$ev := index $.Events $line}}
        {{$ev_log := index $.EventLogs $ind}}
        {{$size := $.LogSize}}
-       {{$line = add $line 1}}
+       {{$index_before := substract $line 1}}
+       {{$index_after := add $line 1}}
        <div class = "details">
-          <div class = "banner_before" data-line-number = {{$line}}>
+          <div class = "banner_before" data-line-number = {{$index_before}}>
             <span id  = "main" onClick="expandContent(this)"> - 5</span>
             <span onClick="expandContent(this)"> - 10</span>
             <span onClick="expandContent(this)"> - 50</span > 
@@ -186,7 +187,7 @@
           <div ></div>
           <a class="event" onClick="expand(this)">+{{$ev}} :</a> <span class = "event_line">{{$ev_log}}</span>
           <div ></div>
-          <div class = "banner_after" data-line-number = {{$line}}  data-full-size = {{$size}}>
+          <div class = "banner_after" data-line-number = {{$index_after}}  data-full-size = {{$size}}>
             <span id  = "main" onClick="expandContent(this)"> +5</span>
             <span onClick="expandContent(this)"> +10</span>
             <span onClick="expandContent(this)"> +50</span > 

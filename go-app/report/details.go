@@ -91,6 +91,8 @@ func loadEvents(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDeta
 	}
 	event_template, err := template.New("events.html").Funcs(template.FuncMap{"add": func(x, y int) int {
 		return x + y
+	}, "substract": func(x, y int) int {
+		return x - y
 	}}).ParseFiles("templates/events.html")
 	template := template.Must(event_template, err)
 	template.Execute(w, struct {
