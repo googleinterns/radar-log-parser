@@ -19,17 +19,17 @@ var (
 		"my-android-bucket": map[string]string{"start": "(?m)^(?:0[1-9]|1[0-2])-(?:0[1-9]|(?:1|2)[0-9]|3(?:0|1))\\s(?:(?:(?:0|1)[0-9])|(?:2[0-3])):[0-5][0-9]:[0-5][0-9]\\.\\d{3}(?:\\s)*\\d{4,5}(?:\\s)*\\d{4,5}\\s", "end": "\\s.*"}}
 )
 
-func LogReport(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetails) {
+func LogReport(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails, cfgFile *Config) {
 	file := r.URL.Path[len("/report/"):]
 	switch file {
-	case FullLogDetails.Analysis_details.FileName:
+	case fullLogDetails.Analysis_details.FileName:
 		loadRawLog(w, r, fullLogDetails)
 	case "events":
-		loadEvents(w, r, fullLogDetails)
+		loadEvents(w, r, fullLogDetails, cfgFile)
 	default:
 		if file[:7] == "Details" {
 			issue_name := r.URL.Path[len("/report/Details/"):]
-			_, ok := FullLogDetails.GroupedIssues[issue_name]
+			_, ok := fullLogDetails.GroupedIssues[issue_name]
 			if ok {
 				loadGroupDetails(w, issue_name, fullLogDetails)
 			} else {
@@ -41,27 +41,28 @@ func LogReport(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetail
 	}
 
 }
-func loadSpecificLogs(w http.ResponseWriter, file string, fullLogDetails FullDetails) {
+func loadSpecificLogs(w http.ResponseWriter, file string, fullLogDetails *FullDetails) {
 	FuncMap := template.FuncMap{
 		"detailType": func() string { return "SpecificLog" },
 		"countLine":  CountLine,
 	}
 	detail_template, err := template.New("details.html").Funcs(FuncMap).ParseFiles("templates/details.html")
 	template := template.Must(detail_template, err)
-	template.Execute(w, FullLogDetails.Analysis_details.SpecificProcess[file])
+	template.Execute(w, fullLogDetails.Analysis_details.SpecificProcess[file])
 }
-func loadGroupDetails(w http.ResponseWriter, issue_name string, fullLogDetails FullDetails) {
+func loadGroupDetails(w http.ResponseWriter, issue_name string, fullLogDetails *FullDetails) {
 	FuncMap := template.FuncMap{
 		"detailType": func() string { return "Group" },
 		"countLine":  CountLine,
 	}
 	detail_template, err := template.New("details.html").Funcs(FuncMap).ParseFiles("templates/details.html")
 	template := template.Must(detail_template, err)
-	template.Execute(w, FullLogDetails.GroupedIssues[issue_name])
+	template.Execute(w, fullLogDetails.GroupedIssues[issue_name])
 }
-func loadNonGroupDetails(w http.ResponseWriter, issue_name string, fullLogDetails FullDetails) {
-	issue_num, _ := strconv.Atoi(FullLogDetails.Analysis_details.Issues[issue_name]["Number"])
-	details, hightlight := nonGroupDetails(FullLogDetails.Analysis_details.RawLog, FullLogDetails.NonGroupedIssues[issue_name], issue_num)
+func loadNonGroupDetails(w http.ResponseWriter, issue_name string, fullLogDetails *FullDetails) {
+	issue_num, _ := strconv.Atoi(fullLogDetails.Analysis_details.Issues[issue_name]["Number"])
+	hightlight := make(map[int]bool) //index=> true = must be highlight
+	details := nonGroupDetails(fullLogDetails.Analysis_details.RawLog, fullLogDetails.NonGroupedIssues[issue_name], issue_num, hightlight)
 	FuncMap := template.FuncMap{
 		"detailType": func() string { return "nonGroup" },
 		"countLine":  CountLine,
@@ -75,24 +76,38 @@ func loadNonGroupDetails(w http.ResponseWriter, issue_name string, fullLogDetail
 		hightlight, details,
 	})
 }
-func loadEvents(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetails) {
-	GetImportantEvents(&CfgFile, FullLogDetails.Analysis_details.RawLog)
-	ev_lines := make([]int, len(fullLogDetails.ImportantEvents), len(fullLogDetails.ImportantEvents))
+func loadEvents(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails, cfgFile *Config) {
+	fullLogDetails.ImportantEvents = make(map[int]string)
+	logs_size := getImportantEvents(cfgFile, fullLogDetails.Analysis_details.RawLog, fullLogDetails.ImportantEvents)
+	ev_lines := make([]int, 0, len(fullLogDetails.ImportantEvents))
 	for line, _ := range fullLogDetails.ImportantEvents {
 		ev_lines = append(ev_lines, line)
 	}
 	sort.Ints(ev_lines)
-	event_template, err := template.New("events.html").Funcs(template.FuncMap{}).ParseFiles("templates/events.html")
+	event_logs := make([]string, 0, len(fullLogDetails.ImportantEvents))
+	contentSlice := strings.Split(fullLogDetails.Analysis_details.RawLog, "\n")
+	for _, line := range ev_lines {
+		event_logs = append(event_logs, contentSlice[line])
+	}
+	event_template, err := template.New("events.html").Funcs(template.FuncMap{"add": func(x, y int) int {
+		return x + y
+	}, "substract": func(x, y int) int {
+		return x - y
+	}}).ParseFiles("templates/events.html")
 	template := template.Must(event_template, err)
 	template.Execute(w, struct {
 		MatchLines []int
 		Events     map[int]string
+		LogSize    int
+		EventLogs  []string
 	}{
 		ev_lines,
-		FullLogDetails.ImportantEvents,
+		fullLogDetails.ImportantEvents,
+		logs_size,
+		event_logs,
 	})
 }
-func loadRawLog(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetails) {
+func loadRawLog(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails) {
 	FuncMap := template.FuncMap{
 		"detailType": func() string { return "RawLog" },
 		"countLine":  CountLine,
@@ -103,17 +118,15 @@ func loadRawLog(w http.ResponseWriter, r *http.Request, fullLogDetails FullDetai
 		Rawlog    string
 		LogLevels []string
 	}{
-		FullLogDetails.Analysis_details.RawLog,
-		Log_levels[FullLogDetails.Analysis_details.Platform],
+		fullLogDetails.Analysis_details.RawLog,
+		Log_levels[fullLogDetails.Analysis_details.Platform],
 	})
 }
 func CountLine(content string) int {
 	return len(strings.Split(content, "\n"))
 }
-func nonGroupDetails(fContent string, nonGroupedIssues map[string]bool, num_issue int) ([]string, map[int]bool) {
+func nonGroupDetails(fContent string, nonGroupedIssues map[string]bool, num_issue int, hightlight map[int]bool) []string {
 	details := make([]string, 0, num_issue*2+1)
-	hightlight := map[int]bool{ //index=> true = must be highlight
-	}
 	last_found_index := 0
 	contentLines := strings.Split(fContent, "\n")
 	found_issue := 0
@@ -136,12 +149,11 @@ func nonGroupDetails(fContent string, nonGroupedIssues map[string]bool, num_issu
 		}
 
 	}
-	return details, hightlight
+	return details
 }
-func GetImportantEvents(cfgFile *Config, fContent string) {
-	var importantEvents = make(map[int]string)
+func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[int]string) int {
 	if len(cfgFile.ImportantEvents) < 1 {
-		return
+		return 0
 	}
 	contentMap := make(map[string]int)
 	contentSlice := strings.Split(fContent, "\n")
@@ -149,6 +161,7 @@ func GetImportantEvents(cfgFile *Config, fContent string) {
 		contentMap[line] = index
 	}
 	var waitGroup sync.WaitGroup
+	var mutex sync.Mutex
 	waitGroup.Add(len(cfgFile.ImportantEvents))
 	for ev, ev_rgx := range cfgFile.ImportantEvents {
 		go func(ev string, ev_rgx string) {
@@ -157,16 +170,19 @@ func GetImportantEvents(cfgFile *Config, fContent string) {
 				waitGroup.Done()
 				return
 			}
-			ev_content := ev_rgx_comp.FindString(fContent)
-			if ev_content != "" {
-				importantEvents[contentMap[ev_content]] = ev
+			ev_content := ev_rgx_comp.FindAllString(fContent, -1)
+			if len(ev_content) > 0 {
+				mutex.Lock()
+				for _, match_ev := range ev_content {
+					importantEvents[contentMap[match_ev]] = ev
+				}
+				mutex.Unlock()
 			}
 			waitGroup.Done()
 		}(ev, ev_rgx)
 	}
 	waitGroup.Wait()
-	FullLogDetails.ImportantEvents = importantEvents
-	return
+	return len(contentSlice)
 }
 func GetLogLeveldetails(platform string, level string, fContent string) string {
 	level_rgx := log_levels_rgx[platform]["start"] + log_levels_map[platform][level] + log_levels_rgx[platform]["end"]

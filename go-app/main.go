@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"os"
 	"radar-log-parser/go-app/report"
 	"radar-log-parser/go-app/settings"
 	"radar-log-parser/go-app/utilities"
+	"strconv"
 	"strings"
 )
 
@@ -16,8 +18,9 @@ type Feedback struct {
 }
 
 var (
-	feedBack = Feedback{}
-	CfgFile  = report.Config{}
+	feedBack       = Feedback{}
+	fullLogDetails = report.FullDetails{}
+	cfg_file       = report.Config{}
 )
 
 var (
@@ -35,7 +38,6 @@ var (
 	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com"}
 ) //TODO: Put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
-
 var (
 	cfg_edit    string
 	bucket_edit string
@@ -87,14 +89,14 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		if len(page) > 5 {
 			if strings.Contains(page, "UploadConfig") {
 				fillUploadCfgPage(w, r)
-			} else if strings.Contains(page, "analyzeLog") {
+			} else if strings.Contains(page, "analyzeLog") { //to remove
 				homeTempl.Execute(w, cloudConfigs)
 			} else if strings.Contains(page, "editConfig") {
 				edit_config_homeTempl.Execute(w, cloudConfigs)
 			} else if strings.Contains(page, "deleteConfig") {
 				delete_configTempl.Execute(w, cloudConfigs)
 			} else {
-				report.LogReport(w, r, report.FullLogDetails)
+				report.LogReport(w, r, &fullLogDetails, &cfg_file)
 			}
 		} else {
 			homeTempl.Execute(w, cloudConfigs)
@@ -102,17 +104,18 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch page {
+	case "report/events/details":
+		loadEventDetails(w, r, fullLogDetails.Analysis_details.RawLog)
 	case "loglevel":
-		loadLogLevel(w, r)
+		loadLogLevel(w, r, fullLogDetails.Analysis_details.Platform, fullLogDetails.Analysis_details.RawLog)
 	case "UploadConfig":
 		loadUploadConfig(w, r)
 	case "editConfig":
 		loadEditConfig(w, r)
-
 	case "deleteConfig":
 		loadDeleteConfig(w, r)
 	default:
-		loadAnalyseLog(w, r)
+		loadAnalyseLog(w, r, &fullLogDetails, &cfg_file)
 	}
 
 }
@@ -123,10 +126,10 @@ func fillUploadCfgPage(w http.ResponseWriter, r *http.Request) {
 	}
 	upload_configTempl.Execute(w, bucketList)
 }
-func loadLogLevel(w http.ResponseWriter, r *http.Request) {
+func loadLogLevel(w http.ResponseWriter, r *http.Request, platform string, rawlog string) {
 	r.ParseMultipartForm(10 << 20)
 	level := r.FormValue("selectedLevel")
-	logContent := report.GetLogLeveldetails(report.FullLogDetails.Analysis_details.Platform, level, report.FullLogDetails.Analysis_details.RawLog)
+	logContent := report.GetLogLeveldetails(platform, level, rawlog)
 	w.Write([]byte(logContent))
 }
 func loadUploadConfig(w http.ResponseWriter, r *http.Request) {
@@ -163,12 +166,28 @@ func loadDeleteConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	feedbackTempl.Execute(w, feedBack)
 }
-func loadAnalyseLog(w http.ResponseWriter, r *http.Request) {
-	err := report.AnalyseLog(w, r, project_id, region_id)
+func loadAnalyseLog(w http.ResponseWriter, r *http.Request, fullDetails *report.FullDetails, conf_file *report.Config) {
+	err := report.AnalyseLog(w, r, project_id, region_id, &fullLogDetails, &cfg_file)
 	if err != nil {
-		getFeedBack(err, "Delete Config")
+		getFeedBack(err, "Log Analysis Error")
 		feedbackTempl.Execute(w, feedBack)
 		return
 	}
-	reportTempl.Execute(w, report.FullLogDetails.Analysis_details)
+	reportTempl.Execute(w, fullLogDetails.Analysis_details)
+}
+func loadEventDetails(w http.ResponseWriter, r *http.Request, rawlog string) {
+	r.ParseMultipartForm(10 << 20)
+	startIndex, _ := strconv.Atoi(r.FormValue("StartIndex"))
+	endIndex, _ := strconv.Atoi(r.FormValue("EndIndex"))
+	logs := strings.Split(rawlog, "\n")
+	type Reponse struct {
+		Content string
+	}
+	content_slice := logs[startIndex : endIndex+1]
+	event_content := strings.Join(content_slice, "\n")
+	resp := Reponse{
+		Content: event_content,
+	}
+	jsonValue, _ := json.Marshal(resp)
+	w.Write(jsonValue)
 }
