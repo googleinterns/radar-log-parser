@@ -14,14 +14,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func extractConfig(cfgName string, bucket string, cfgFile *Config) error {
-	cfg_data, err := utilities.DownloadFile(nil, bucket, cfgName)
+func extractConfig(cfgName string, bucket string, cfgFile *Config) (map[string]string, error) {
+	cfg_data, bucket_attrs, err := utilities.DownloadFile(nil, bucket, cfgName)
 	if err != nil {
-		return err
+		return bucket_attrs, err
 	}
 	cfg := &ConfigInterface{}
 	if err := yaml.Unmarshal(cfg_data, cfg); err != nil {
-		return err
+		return bucket_attrs, err
 	}
 	cfgFile.IssuesGeneralFields.Details = cfg.IssuesGeneralFields.Details
 	cfgFile.IssuesGeneralFields.Log_level = cfg.IssuesGeneralFields.Log_level
@@ -35,6 +35,20 @@ func extractConfig(cfgName string, bucket string, cfgFile *Config) error {
 	for issue_name, _ := range cfg.Issues {
 		cfgFile.Issues[issue_name] = extract_issues_content(cfg.Issues[issue_name])
 	}
+	return bucket_attrs, nil
+}
+func extractPlatformConfig(cfgName string, bucket string, platform_cfg *PlatformConfig) error {
+	cfg_data, _, err := utilities.DownloadFile(nil, bucket, cfgName)
+	if err != nil {
+		return err
+	}
+	cfg := &PlatformConfigInterface{}
+	if err := yaml.Unmarshal(cfg_data, cfg); err != nil {
+		return err
+	}
+	platform_cfg.LogLevels = cfg.LogLevels
+	platform_cfg.LevelLetter = cfg.LevelLetter
+	platform_cfg.LevelRegex = cfg.LevelRegex
 	return nil
 }
 func extract_issues_content(issue interface{}) Issue {

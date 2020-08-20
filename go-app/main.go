@@ -35,7 +35,7 @@ var (
 var (
 	project_id           string   = "log-parser-278319"
 	region_id            string   = "ue"
-	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com"}
+	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com", "platform_level_details"}
 ) //TODO: Put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
 var (
