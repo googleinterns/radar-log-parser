@@ -70,11 +70,12 @@ func DeleteConfig(r *http.Request, project_id string, region_id string, cloudCon
 	if err != nil {
 		return cloudConfigs, err
 	}
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
+	cfgfile := r.FormValue("selectedFile")
+
+	selectedBucket, found := doc.Find("option[value=" + cfgfile + "]").Parent().Attr("label")
 	if !found {
 		return cloudConfigs, err
 	}
-	cfgfile := r.FormValue("selectedFile")
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {

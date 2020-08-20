@@ -96,7 +96,7 @@ func uploadLogFile(w http.ResponseWriter, r *http.Request, project_id string, re
 	if err != nil {
 		return "", nil, cfg_file, "", err
 	}
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
+	selectedBucket, found := doc.Find("optgroup").Attr("label") //TODO: This should be updated when the update group will be solved. This allow only to use config files of the first bucket that appears in the dropdown of analyse log page
 	if !found {
 		return "", nil, cfg_file, "", err
 	}
