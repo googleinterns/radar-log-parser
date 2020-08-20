@@ -29,16 +29,14 @@
   background-color: white;
   color: grey;
 }
-textarea {
+#fContent {
   font-family: Arial;
   font-size: 12pt;
   width:100%;
   height:100vw;
   overflow-x: auto;
 }
-p {
-  color:#ff00ff;
-}
+
 .log_level{
   margin-bottom:2%;
   margin-top :5px; 
@@ -46,7 +44,34 @@ p {
 select {
   background-color:gray;
 }
-
+.group_detail {
+  color: fuchsia;
+  cursor: pointer; 
+  text-align: left;
+  text-decoration: underline;    
+}
+.details{
+  margin-bottom:1%;
+}
+.content{
+  overflow-x: auto;
+}
+.banner_after,.banner_before{
+  width:100%;
+  padding:0.3%;
+  background-color:	#E8E8E8;
+  display: none;  
+}
+.banner_after{
+  margin-bottom:0.2%;
+}
+#main{
+  margin-left:40%;
+}
+span{
+  cursor: pointer;
+  margin-left:10%;
+}
 </style>
 <script >
   function getLevelLog(){
@@ -60,6 +85,127 @@ select {
    
     try { xhr.send(new FormData(document.getElementById("levelForm"))); } catch (err) {}
   }
+  function expand(elem){
+    var name = elem.innerHTML;
+    if (name.charAt(0) == "+"){
+    	elem.innerHTML = name.replace(name.charAt(0), "");
+      var siblings = elem.parentNode.children;
+      if(siblings[0].getAttribute("class")==="banner_before"){
+        siblings[0].style.display = "block";
+      }
+      if (siblings[siblings.length-1].getAttribute("class")==="banner_after"){
+        siblings[siblings.length-1].style.display = "block";
+      }  
+    }
+  }
+  function expandContent(element){
+     var expand_number ;
+     if(element.innerHTML == "All"){
+      expand_number = Math.pow(2,53);
+     }
+     else{
+      var expand_content = element.innerHTML;
+      expand_number = parseInt(expand_content.replace(/ /g, ''));
+     }
+     if (element.parentNode.getAttribute("class")=="banner_after"){
+       expandAfterContent(element,expand_number);
+     }
+     else{
+       expandBeforeContent(element,expand_number);
+     } 
+   }
+   function setContent(content_elem,banner_elem,concurrent_banner,startIndex,endIndex,merge,banner_after){
+    var xhr = new XMLHttpRequest();
+     xhr.onreadystatechange = function() {
+       if (xhr.readyState == 4 && xhr.status == 200) {
+           var json = JSON.parse(xhr.responseText);
+           var content = json["Content"]; 
+           var details_node = document.createElement("DIV");
+           details_node.style.margin = 0;
+           var node= document.createElement("PRE");
+           node.style.margin = 0;
+           node.innerHTML = content;
+           details_node.appendChild(node);
+           if(!banner_after){
+             banner_elem.setAttribute("data-line-number",startIndex-1);
+             content_elem.insertBefore(details_node, content_elem.firstElementChild);
+           }
+           else{
+              banner_elem.setAttribute("data-line-number",endIndex+1);
+              content_elem.appendChild(details_node);
+           }
+           if(merge){
+              banner_elem.parentNode.removeChild(banner_elem);
+              if(concurrent_banner!=null){
+                concurrent_banner.parentNode.removeChild(concurrent_banner);
+              }    
+           }
+           
+       }
+     }
+     var formData = new FormData();
+     formData.append("StartIndex",startIndex);
+     formData.append("EndIndex",endIndex);
+     var url = document.URL;
+     var issue_name = url.split('Details/')[1];
+     var request_url = "/report/Details/"+issue_name;
+     xhr.open("POST", request_url, true);
+     try { xhr.send(formData); } catch (err) {}
+   }
+   function expandAfterContent(element,expand_number){
+     var content_elem,concurrent_banner,start,end,merge;
+     var banner_elem = element.parentNode;
+     content_elem = banner_elem.previousElementSibling;
+     var line_number = parseInt(banner_elem.getAttribute("data-line-number"));
+     start = line_number;
+     if(banner_elem.parentNode.nextElementSibling == null){
+        end = parseInt(banner_elem.getAttribute("data-full-size"))-1;
+        merge = true;
+        if (expand_number != Math.pow(2,53) &&(line_number+expand_number-1<end)){
+          end = line_number+expand_number-1;
+          merge = false;
+        }
+     }
+     else{
+        concurrent_banner = banner_elem.parentNode.nextElementSibling.firstElementChild;
+        var concur_line_number = parseInt(concurrent_banner.getAttribute("data-line-number"));
+        if (expand_number == Math.pow(2,53) || (line_number+expand_number>concur_line_number+1)){
+          end = concur_line_number;
+          merge = true;
+        }
+        else {
+          end = line_number+expand_number-1;
+        }
+     }
+     setContent(content_elem,banner_elem,concurrent_banner,start,end,merge,true);
+   }
+   function expandBeforeContent(element,expand_number){
+     var content_elem,concurrent_banner,start,end,merge;
+     var banner_elem = element.parentNode;
+     content_elem = banner_elem.nextElementSibling;
+     var line_number = parseInt(banner_elem.getAttribute("data-line-number"));
+     end = line_number;
+     if(banner_elem.parentNode.previousElementSibling == null){
+       start = 0;
+       merge = true;
+       if (expand_number != Math.pow(2,53) && (line_number+expand_number+1>0)){
+         start = line_number+expand_number+1;
+         merge = false;
+       }
+     }
+     else{
+       concurrent_banner = banner_elem.parentNode.previousElementSibling.lastElementChild;
+       var concur_line_number = parseInt(concurrent_banner.getAttribute("data-line-number"));
+       if (expand_number == Math.pow(2,53) || (line_number+expand_number<concur_line_number-1)){
+         start = concur_line_number;
+         merge = true;
+       }
+       else {
+         start = line_number+expand_number+1;
+       } 
+      }
+     setContent(content_elem,banner_elem,concurrent_banner,start,end,merge,false);
+    }
 </script>
 </head>
   <body>
@@ -88,12 +234,12 @@ select {
           </form>
         </div>
          <div>
-            <textarea id = "fContent" name="fContent" >{{.}} </textarea>
+            <pre id = "fContent" name="fContent" >{{.}} </pre>
           </div>
           
         {{else if eq $type_issue "SpecificLog"}}
            <div>
-             <textarea name="fContent" >{{.}} </textarea>
+             <pre name="fContent" >{{.}} </pre>
            </div>
       {{else if eq $type_issue "Group"}}
         <table id="analysisResult">
@@ -131,19 +277,30 @@ select {
             {{end}}    
        </table> 
        {{else}} 
-          {{range $index ,$line := .Details}}
-              {{if index $.Highlight $index}}
-                <p>{{$line}}</p>
-              {{else}}
-                <details>
-                  <summary>See more details</summary>
-                  <div>
-                    {{$countLine := countLine $line}}
-                    <textarea name="fContent" id = "fContent" rows={{$countLine}} >{{$line}} </textarea>
+          <div class = "content">
+            {{range $ind,$line := .Details}}
+               {{$size := $.LogSize}}
+               {{$index_before := substract $ind 1}}
+               {{$index_after := add $ind 1}}
+               <div class = "details">
+                  <div class = "banner_before" data-line-number = {{$index_before}}>
+                    <span id  = "main" onClick="expandContent(this)"> - 5</span>
+                    <span onClick="expandContent(this)"> - 10</span>
+                    <span onClick="expandContent(this)"> - 50</span > 
+                    <span onClick="expandContent(this)">All</span>
                   </div>
-                </details>
-              {{end}}
-          {{end}}    
+                  <div ></div>
+                  <a class="group_detail" onClick="expand(this)">+{{$line}}</a>
+                  <div ></div>
+                  <div class = "banner_after" data-line-number = {{$index_after}}  data-full-size = {{$size}}>
+                    <span id  = "main" onClick="expandContent(this)"> +5</span>
+                    <span onClick="expandContent(this)"> +10</span>
+                    <span onClick="expandContent(this)"> +50</span > 
+                    <span onClick="expandContent(this)">All</span>
+                  </div>
+                </div>
+            {{end}}   
+         </div>  
        {{end}}   
   </body>
 </html>

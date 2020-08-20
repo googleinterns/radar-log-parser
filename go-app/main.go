@@ -168,7 +168,9 @@ func reportHandler(w http.ResponseWriter, r *http.Request) {
 		report.LogReport(w, r, &fullLogDetails, &cfg_file)
 	} else {
 		page := r.URL.Path[len("/report"):]
-		if strings.Contains(page, "/events/details") {
+		if strings.Contains(page, "/Details") {
+			report.LoadNonGroupSpecDetails(w, r, fullLogDetails.Analysis_details.RawLog)
+		} else if strings.Contains(page, "/events/details") {
 			report.LoadEventDetails(w, r, fullLogDetails.Analysis_details.RawLog)
 		} else {
 			loadAnalyseLog(w, r, &fullLogDetails, &cfg_file)
