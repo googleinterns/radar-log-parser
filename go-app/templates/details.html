@@ -43,14 +43,23 @@ p {
   margin-top :5px; 
 }
 select {
-  background-color: #ff00ff;
+  background-color:gray;
 }
 
 </style>
 <script >
-  document.getElementById("fContent").cols =window.innerWidth -5;
-  function submit() {
-    document.getElementById("levelForm").submit();
+  function getLevelLog(){
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState == 4 && xhr.status == 200) {
+        console.log("response est"); 
+        console.log(xhr.responseText); 
+        document.getElementById("fContent").innerHTML =xhr.responseText;
+      }
+    }
+    xhr.open("POST", "/loglevel", true);  
+   
+    try { xhr.send(new FormData(document.getElementById("levelForm"))); } catch (err) {}
   }
 </script>
 </head>
@@ -67,11 +76,11 @@ select {
       </div>
     </div>
       {{$type_issue := detailType}}
-      {{if eq $type_issue "Log"}}
+      {{if eq $type_issue "RawLog"}}
         <div class ="log_level">
           <form method="POST" enctype="multipart/form-data" id = "levelForm">
               <label id ="log_level" >Pick a Log Level:</label>
-              <select name = "selectedLevel"   onchange="submit();"required>
+              <select name = "selectedLevel"   onchange="getLevelLog()"required>
                 <option id = "All" value="All" selected >All</option>
                 {{range $index ,$level := .LogLevels}}
                   <option id = "{{ $level}}" value="{{ $level }}">{{ $level }}</option>
@@ -80,8 +89,13 @@ select {
           </form>
         </div>
          <div>
-            <textarea name="fContent" >{{.Rawlog}} </textarea>
+            <textarea id = "fContent" name="fContent" >{{.}} </textarea>
           </div>
+          
+        {{else if eq $type_issue "SpecificLog"}}
+           <div>
+             <textarea name="fContent" >{{.}} </textarea>
+           </div>
       {{else if eq $type_issue "Group"}}
         <table id="analysisResult">
             <tr>

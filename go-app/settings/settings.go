@@ -127,7 +127,6 @@ func SaveConfig(r *http.Request, bucket_edit string, cfg_edit string) error {
 	}
 	return nil
 }
-
 func DisplayConfig(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (string, string, string, error) {
 	r.ParseMultipartForm(10 << 20)
 	cfgfile := r.FormValue("selectedFile")
@@ -143,7 +142,7 @@ func DisplayConfig(w http.ResponseWriter, r *http.Request, project_id string, re
 	if err != nil {
 		return "", "", "", err
 	}
-	selectedBucket, found := doc.Find("option[value=" + cfgfile + "]").Attr("label")
+	selectedBucket, found := doc.Find("option[value=" + cfgfile + "]").Parent().Attr("label")
 	if !found {
 		return "", "", "", err
 	}

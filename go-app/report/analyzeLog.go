@@ -94,7 +94,11 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 		headerMap[field] = true
 	}
 	getIssueDetails(cfgFile, fContent, headerMap)
-	// Get all issues in a prioritized order
+	FullLogDetails.Analysis_details.OrderedIssues = sortIssue(cfgFile)
+	FullLogDetails.Analysis_details.Header = fillHeader(headerMap)
+	return nil
+}
+func sortIssue(cfgFile *Config) []string {
 	issues := make([]string, 0, len(cfgFile.Issues))
 	for k := range cfgFile.Issues {
 		issues = append(issues, k)
@@ -102,8 +106,9 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 	sort.Slice(issues, func(i, j int) bool {
 		return cfgFile.Priority[issues[i]] > cfgFile.Priority[issues[j]]
 	})
-	FullLogDetails.Analysis_details.OrderedIssues = issues
-
+	return issues
+}
+func fillHeader(headerMap map[string]bool) []string {
 	header := make([]string, 0, len(headerMap))
 	header = append(header, "Issue", "Number", "Details", "Timestamp", "LogLevel")
 	for _, field := range header {
@@ -114,9 +119,7 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 			header = append(header, field)
 		}
 	}
-	FullLogDetails.Analysis_details.Header = header
-
-	return nil
+	return header
 }
 func getSpecProcessLogs(cfgFile *Config, fContent string) {
 	var waitGroup sync.WaitGroup
@@ -131,7 +134,7 @@ func getSpecProcessLogs(cfgFile *Config, fContent string) {
 			}
 			proc_content := proc_rgx_comp.FindAllString(fContent, -1)
 			if len(proc_content) > 1 {
-				FullLogDetails.Analysis_details.SpecificProcess[proc] = strings.Join(proc_rgx_comp.FindAllString(fContent, -1), "\n")
+				FullLogDetails.Analysis_details.SpecificProcess[proc] = strings.Join(proc_content, "\n")
 			}
 			waitGroup.Done()
 		}(proc, proc_rgx)
@@ -139,7 +142,6 @@ func getSpecProcessLogs(cfgFile *Config, fContent string) {
 	waitGroup.Wait()
 
 }
-
 func getIssueDetails(cfgFile *Config, fContent string, headerMap map[string]bool) {
 	FullLogDetails.Analysis_details.Issues = make(map[string]map[string]string)
 	specific_proc_content := make(map[string]string)
@@ -160,7 +162,8 @@ func getIssueDetails(cfgFile *Config, fContent string, headerMap map[string]bool
 						if err != nil {
 							continue
 						}
-						proc_issue = strings.Join(proc_rgx_comp.FindAllString(fContent, -1), "\n")
+						raw_proc_issue := proc_rgx_comp.FindAllString(fContent, -1)
+						proc_issue = strings.Join(raw_proc_issue, "\n")
 						specific_proc_content[proc] = proc_issue
 					}
 				}
@@ -187,8 +190,43 @@ func groupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]bool, 
 	group_names := group_rgx.SubexpNames()
 	group_content := make(map[string][][]string)
 	group_count := make(map[string][]int)
+	last_matches, issues_count := fillGroupDetails(group_content, group_count, issueContent, group_rgx)
+	issue_map := FullLogDetails.Analysis_details.Issues[issue_name]
+	issue_map["Number"] += strconv.Itoa(issues_count)
+
+	timestampRegex, _ := regexp.Compile(cfgFile.IssuesGeneralFields.Timestamp)
+	match := timestampRegex.FindStringSubmatch(last_matches)
+	if len(match) > 0 {
+		issue_map["Timestamp"] = match[0]
+	}
+
+	log_rgx, err := regexp.Compile(cfgFile.IssuesGeneralFields.Log_level)
+	if err != nil {
+		return
+	}
+	match = log_rgx.FindStringSubmatch(last_matches)
+	if len(match) > 1 {
+		issue_map["LogLevel"] = match[1]
+	}
+	for field, field_rgx := range cfgFile.IssuesGeneralFields.OtherFields {
+		setFieldContent(field, field_rgx, issue_name, issueContent)
+	}
+
+	for field, field_rgx := range issue.additional_fields {
+		setFieldContent(field, field_rgx, issue_name, issueContent)
+		headerMap[field] = true
+	}
+
+	groupedDetails := GroupedStruct{}
+	groupedDetails.Group_content = group_content
+	groupedDetails.Group_count = group_count
+	groupedDetails.Group_names = group_names
+	FullLogDetails.GroupedIssues[issue_name] = groupedDetails
+}
+func fillGroupDetails(group_content map[string][][]string, group_count map[string][]int, issueContent string, group_rgx *regexp.Regexp) (string, int) {
 	last_matches := ""
-	for _, log := range strings.Split(issueContent, "\n") {
+	issueContentSlice := strings.Split(issueContent, "\n")
+	for _, log := range issueContentSlice {
 		matches := group_rgx.FindStringSubmatch(log)
 		if len(matches) > 2 {
 			last_matches = log
@@ -210,55 +248,13 @@ func groupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]bool, 
 			}
 		}
 	}
-
 	issues_count := 0
 	for _, numSlice := range group_count {
 		for _, num := range numSlice {
 			issues_count += num
 		}
 	}
-
-	FullLogDetails.Analysis_details.Issues[issue_name]["Number"] += strconv.Itoa(issues_count)
-
-	timestampRegex, _ := regexp.Compile(cfgFile.IssuesGeneralFields.Timestamp)
-	match := timestampRegex.FindStringSubmatch(last_matches)
-	if len(match) > 0 {
-		FullLogDetails.Analysis_details.Issues[issue_name]["Timestamp"] = match[0]
-	}
-
-	log_rgx, err := regexp.Compile(cfgFile.IssuesGeneralFields.Log_level)
-	if err != nil {
-		return
-	}
-	match = log_rgx.FindStringSubmatch(last_matches)
-	if len(match) > 1 {
-		FullLogDetails.Analysis_details.Issues[issue_name]["LogLevel"] = match[1]
-	}
-	for field, field_rgx := range cfgFile.IssuesGeneralFields.OtherFields {
-		field_rgx_comp, err := regexp.Compile(field_rgx)
-		if err != nil {
-			continue
-		}
-		match := field_rgx_comp.FindAllString(issueContent, -1)
-		FullLogDetails.Analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
-
-	}
-
-	for field, field_rgx := range issue.additional_fields {
-		field_rgx_comp, err := regexp.Compile(field_rgx)
-		if err != nil {
-			continue
-		}
-		match := field_rgx_comp.FindAllString(issueContent, -1)
-		FullLogDetails.Analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
-		headerMap[field] = true
-	}
-
-	groupedDetails := GroupedStruct{}
-	groupedDetails.Group_content = group_content
-	groupedDetails.Group_count = group_count
-	groupedDetails.Group_names = group_names
-	FullLogDetails.GroupedIssues[issue_name] = groupedDetails
+	return last_matches, issues_count
 }
 func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]bool, issueContent string, issue_name string) {
 	issue_rgx, err := regexp.Compile(issue.regex)
@@ -271,10 +267,9 @@ func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]boo
 		filter_logs_map[filter_log] = true
 	}
 	FullLogDetails.NonGroupedIssues[issue_name] = filter_logs_map
-
-	FullLogDetails.Analysis_details.Issues[issue_name]["Number"] = strconv.Itoa(len(filter_logs))
+	issue_map := FullLogDetails.Analysis_details.Issues[issue_name]
+	issue_map["Number"] = strconv.Itoa(len(filter_logs))
 	issueContent = strings.Join(filter_logs, "\n")
-
 	if len(filter_logs) > 0 {
 		log_rgx, err := regexp.Compile(cfgFile.IssuesGeneralFields.Log_level)
 		if err != nil {
@@ -282,33 +277,28 @@ func nongroupIssueDetails(issue Issue, cfgFile *Config, headerMap map[string]boo
 		}
 		match := log_rgx.FindStringSubmatch(filter_logs[0])
 		if len(match) > 1 {
-			FullLogDetails.Analysis_details.Issues[issue_name]["LogLevel"] = match[1]
+			issue_map["LogLevel"] = match[1]
 		}
-
 		for field, field_rgx := range cfgFile.IssuesGeneralFields.OtherFields {
-			field_rgx_comp, err := regexp.Compile(field_rgx)
-			if err != nil {
-				return
-			}
-			match := field_rgx_comp.FindAllString(issueContent, -1)
-			FullLogDetails.Analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
-
+			setFieldContent(field, field_rgx, issue_name, issueContent)
 		}
-
 		for field, field_rgx := range issue.additional_fields {
-			field_rgx_comp, err := regexp.Compile(field_rgx)
-			if err != nil {
-				return
-			}
-			match := field_rgx_comp.FindAllString(issueContent, -1)
-			FullLogDetails.Analysis_details.Issues[issue_name][field] = strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
+			setFieldContent(field, field_rgx, issue_name, issueContent)
 			headerMap[field] = true
 		}
-
 		timestampRegex, _ := regexp.Compile(cfgFile.IssuesGeneralFields.Timestamp)
 		match = timestampRegex.FindStringSubmatch(filter_logs[len(filter_logs)-1])
 		if len(match) > 0 {
-			FullLogDetails.Analysis_details.Issues[issue_name]["Timestamp"] = match[0]
+			issue_map["Timestamp"] = match[0]
 		}
 	}
+}
+func setFieldContent(field string, field_rgx string, issue_name string, issueContent string) {
+	field_rgx_comp, err := regexp.Compile(field_rgx)
+	if err != nil {
+		return
+	}
+	match := field_rgx_comp.FindAllString(issueContent, -1)
+	fieldContent := strconv.Itoa(len(match)) + " :  " + strings.Join(match, "\n")
+	FullLogDetails.Analysis_details.Issues[issue_name][field] = fieldContent
 }
