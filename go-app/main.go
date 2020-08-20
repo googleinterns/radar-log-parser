@@ -103,6 +103,11 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if strings.Contains(page, "report/details") { //TODO:Remove
+
+		report.LogReport(w, r, &fullLogDetails, &cfg_file)
+		return
+	}
 	switch page {
 	case "report/events/details":
 		loadEventDetails(w, r, fullLogDetails.Analysis_details.RawLog)
