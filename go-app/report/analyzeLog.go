@@ -71,12 +71,13 @@ func AnalyseLog(w http.ResponseWriter, r *http.Request, project_id string, regio
 		return err
 	}
 	fullLogDetails.Analysis_details = AnalysisDetails{}
-	//Set the selected platform
-	fullLogDetails.Analysis_details.Platform = bucket
-	err = extractConfig(cfgName, bucket, cfgFile)
+
+	bucket_attrs, err := extractConfig(cfgName, bucket, cfgFile)
 	if err != nil {
 		return err
 	}
+	//Set the selected platform
+	fullLogDetails.Analysis_details.Platform = bucket_attrs["platform"]
 	fullLogDetails.GroupedIssues = make(map[string]GroupedStruct)
 	fullLogDetails.NonGroupedIssues = make(map[string]map[string]bool)
 	fullLogDetails.Analysis_details.FileName = *fName

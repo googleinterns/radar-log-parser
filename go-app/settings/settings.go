@@ -146,7 +146,7 @@ func DisplayConfig(w http.ResponseWriter, r *http.Request, project_id string, re
 	if !found {
 		return "", "", "", err
 	}
-	content, err := utilities.DownloadFile(w, selectedBucket, cfgfile)
+	content, _, err := utilities.DownloadFile(w, selectedBucket, cfgfile)
 	if err != nil {
 		return "", "", "", err
 	}

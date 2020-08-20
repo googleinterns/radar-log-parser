@@ -11,11 +11,11 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func DownloadFile(w io.Writer, bucket, object string) ([]byte, error) {
+func DownloadFile(w io.Writer, bucket, object string) ([]byte, map[string]string, error) {
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage.NewClient: %v", err)
+		return nil, nil, fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
 
@@ -23,18 +23,23 @@ func DownloadFile(w io.Writer, bucket, object string) ([]byte, error) {
 	defer cancel()
 	rc, err := client.Bucket(bucket).Object(object).NewReader(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Object(%q).NewReader: %v", object, err)
+		return nil, nil, fmt.Errorf("Object(%q).NewReader: %v", object, err)
 	}
 
 	defer rc.Close()
 
 	data, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
+		return nil, nil, fmt.Errorf("ioutil.ReadAll: %v", err)
 	}
-	return data, nil
+	attrs, err := client.Bucket(bucket).Attrs(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in retrieving: %v", err)
+	}
+	return data, attrs.Labels, nil
 
 }
+
 func GetBuckets(project_id string) ([]string, error) {
 	ctx := context.Background()
 	var buckets []string

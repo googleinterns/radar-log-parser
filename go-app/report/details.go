@@ -11,13 +11,20 @@ import (
 	"sync"
 )
 
+type PlatformConfigInterface struct {
+	LogLevels   map[string][]string          `yaml:"LogLevels"`
+	LevelLetter map[string]map[string]string `yaml:"LevelLetter"`
+	LevelRegex  map[string]map[string]string `yaml:"LevelRegex"`
+}
+type PlatformConfig struct {
+	LogLevels   map[string][]string
+	LevelLetter map[string]map[string]string
+	LevelRegex  map[string]map[string]string
+}
+
 var (
-	Log_levels = map[string][]string{"Ios": []string{"Critical", "Error", "Warning", "Notice", "Info", "Debug", "Trace"},
-		"my-android-bucket": []string{"Assert", "Error", "Warning", "Info", "Debug", "Verbose"}}
-	log_levels_map = map[string]map[string]string{"Ios": map[string]string{"Critical": "C", "Error": "E", "Warning": "W", "Notice": "N", "Info": "I", "Debug": "D", "Trace": "T"},
-		"my-android-bucket": map[string]string{"Assert": "A", "Error": "E", "Warning": "W", "Info": "I", "Debug": "D", "Verbose": "V"}}
-	log_levels_rgx = map[string]map[string]string{"Ios": map[string]string{"start": "", "end": ""},
-		"my-android-bucket": map[string]string{"start": "(?m)^(?:0[1-9]|1[0-2])-(?:0[1-9]|(?:1|2)[0-9]|3(?:0|1))\\s(?:(?:(?:0|1)[0-9])|(?:2[0-3])):[0-5][0-9]:[0-5][0-9]\\.\\d{3}(?:\\s)*\\d{4,5}(?:\\s)*\\d{4,5}\\s", "end": "\\s.*"}}
+	platform_cfg_name    = "platform_level_details.yml"
+	platform_bucket_name = "platform_level_details"
 )
 
 func LogReport(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails, cfgFile *Config) {
@@ -142,6 +149,13 @@ func loadEvents(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDeta
 	})
 }
 func loadRawLog(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails) {
+	//Get platform levels
+	platform_cfg := PlatformConfig{}
+	platform_levels := []string{}
+	err := extractPlatformConfig(platform_cfg_name, platform_bucket_name, &platform_cfg)
+	if err == nil {
+		platform_levels = platform_cfg.LogLevels[fullLogDetails.Analysis_details.Platform]
+	}
 	FuncMap := template.FuncMap{
 		"detailType": func() string { return "RawLog" },
 		"add":        Add,
@@ -154,7 +168,7 @@ func loadRawLog(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDeta
 		LogLevels []string
 	}{
 		fullLogDetails.Analysis_details.RawLog,
-		Log_levels[fullLogDetails.Analysis_details.Platform],
+		platform_levels,
 	})
 }
 func Add(x, y int) int {
@@ -207,7 +221,12 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 	return len(contentSlice)
 }
 func GetLogLeveldetails(platform string, level string, fContent string) string {
-	level_rgx := log_levels_rgx[platform]["start"] + log_levels_map[platform][level] + log_levels_rgx[platform]["end"]
+	platform_cfg := PlatformConfig{}
+	err := extractPlatformConfig(platform_cfg_name, platform_bucket_name, &platform_cfg)
+	if err != nil {
+		return ""
+	}
+	level_rgx := platform_cfg.LevelRegex[platform]["Start"] + platform_cfg.LevelLetter[platform][level] + platform_cfg.LevelRegex[platform]["End"]
 	lev_rgx_comp, err := regexp.Compile(level_rgx)
 	if err != nil {
 		return ""
