@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"regexp"
@@ -21,25 +22,39 @@ var (
 
 func LogReport(w http.ResponseWriter, r *http.Request, fullLogDetails *FullDetails, cfgFile *Config) {
 	file := r.URL.Path[len("/report/"):]
-	switch file {
-	case fullLogDetails.Analysis_details.FileName:
+	reportType := getReportType(file, fullLogDetails)
+	switch reportType {
+	case "Rawlog":
 		loadRawLog(w, r, fullLogDetails)
-	case "events":
+	case "SpecificProcess":
+		loadSpecificLogs(w, file, fullLogDetails)
+	case "Events":
 		loadEvents(w, r, fullLogDetails, cfgFile)
-	default:
-		if file[:7] == "Details" {
-			issue_name := r.URL.Path[len("/report/Details/"):]
-			_, ok := fullLogDetails.GroupedIssues[issue_name]
-			if ok {
-				loadGroupDetails(w, issue_name, fullLogDetails)
-			} else {
-				loadNonGroupDetails(w, issue_name, fullLogDetails)
-			}
+	case "Details":
+		issue_name := r.URL.Path[len("/report/Details/"):]
+		_, ok := fullLogDetails.GroupedIssues[issue_name]
+		if ok {
+			loadGroupDetails(w, issue_name, fullLogDetails)
 		} else {
-			loadSpecificLogs(w, file, fullLogDetails)
+			loadNonGroupDetails(w, issue_name, fullLogDetails)
 		}
-	}
+	default:
 
+	}
+}
+func getReportType(s string, fullLogDetails *FullDetails) string {
+	_, ok := fullLogDetails.Analysis_details.SpecificProcess[s]
+	if ok {
+		return "SpecificProcess"
+	} else if s == fullLogDetails.Analysis_details.FileName {
+		return "Rawlog"
+	} else if s == "events" {
+		return "Events"
+	} else if strings.Contains(s, "Details") {
+		return "Details"
+	} else {
+		return ""
+	}
 }
 func loadSpecificLogs(w http.ResponseWriter, file string, fullLogDetails *FullDetails) {
 	FuncMap := template.FuncMap{
@@ -191,4 +206,21 @@ func GetLogLeveldetails(platform string, level string, fContent string) string {
 		return ""
 	}
 	return strings.Join(lev_rgx_comp.FindAllString(fContent, -1), "\n")
+}
+
+func LoadEventDetails(w http.ResponseWriter, r *http.Request, rawlog string) {
+	r.ParseMultipartForm(10 << 20)
+	startIndex, _ := strconv.Atoi(r.FormValue("StartIndex"))
+	endIndex, _ := strconv.Atoi(r.FormValue("EndIndex"))
+	logs := strings.Split(rawlog, "\n")
+	type Reponse struct {
+		Content string
+	}
+	content_slice := logs[startIndex : endIndex+1]
+	event_content := strings.Join(content_slice, "\n")
+	resp := Reponse{
+		Content: event_content,
+	}
+	jsonValue, _ := json.Marshal(resp)
+	w.Write(jsonValue)
 }

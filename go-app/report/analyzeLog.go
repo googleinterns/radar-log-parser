@@ -143,16 +143,20 @@ func setSpecProcessLogs(cfgFile *Config, fContent string, spec_proc_map map[stri
 		}(proc, proc_rgx)
 	}
 	waitGroup.Wait()
+
 }
 func getIssueDetails(cfgFile *Config, fContent string, headerMap map[string]bool, issues_map map[string]map[string]string, spec_proc_map map[string]string, grp_issues map[string]GroupedStruct, ngrp_issues map[string]map[string]bool) {
 	specific_proc_content := make(map[string]string)
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
+	var map_mutex sync.Mutex
 	var spec_mutex sync.Mutex
 	wg.Add(len(cfgFile.Issues))
 	for issue_name, issue := range cfgFile.Issues {
 		go func(issue_name string, issue Issue) {
+			map_mutex.Lock()
 			issues_map[issue_name] = make(map[string]string)
+			map_mutex.Unlock()
 			//Filter the logs belonging to the issue specific process
 			issueContent := ""
 			for proc, proc_rgx := range issue.specific_process {
