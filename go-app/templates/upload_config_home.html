@@ -4,27 +4,33 @@
   <meta charset="utf-8" >
   <title> Radar-log-parser</title>
   <link rel="stylesheet" href="/assets/styles.css">
-  <script >
+  <style>
+     
+     #create_bucket_elements{
+     	display:none;
+     }
+     #config_file_upload{
+       margin-right :40px;
+     }
+    #bucket{
+       margin-right :44px;
+    }
+   #bucket_name_label{
+      margin-right :5px;
+   }
+   #platform_label{
+      margin-right :39px;
+   }
+ </style>
+ <script >
     function createBucket() {
       if (document.getElementsByTagName("select")[0].options[document.getElementsByTagName("select")[0].selectedIndex].value == "Create Bucket"){
-        var nameLabel = document.createElement("label");
-        nameLabel.setAttribute("for", "bucket_name");
-        nameLabel.textContent = 'Bucket Name:';
-        var bucket_name = document.createElement("input");
-        bucket_name.setAttribute("type", "text");
-        bucket_name.setAttribute("name", "bucketName");
-        document.getElementsByTagName("select")[0].parentNode.insertBefore(bucket_name, document.getElementsByTagName("select")[0].nextSibling);
-        document.getElementsByTagName("select")[0].parentNode.insertBefore(nameLabel, document.getElementsByTagName("select")[0].nextSibling);
-        /***delete after and put in style***/
-        document.getElementsByTagName("select")[0].parentNode.insertBefore(document.createElement("br"), document.getElementsByTagName("select")[0].nextSibling);
-        document.getElementsByTagName("select")[0].parentNode.insertBefore(document.createElement("br"), document.getElementsByTagName("select")[0].nextSibling);
-        /*********************************/      
+        document.getElementById("create_bucket_elements").style.display = "block";       
       }
       else{
-        //remove bucketname input if the user have been pressed the button before
+        	 document.getElementById("create_bucket_elements").style.display = "none";
       }
     }
-  
    </script>
 </head>
 <body>
@@ -47,15 +53,28 @@
       <label for="bucket" id ="bucket">Bucket:</label>
        <select name = "selectedFile" id="config_file" onchange="createBucket();" required>
         <option value="0">Pick a bucket:</option>
-        {{range $index, $value := .}}
+        {{range $index, $value := .BucketList}}
             <option value="{{ $value }}">{{ $value }}</option>
         {{end}}
         <option value="Create Bucket"style="color:#4285F4;">Create Bucket</option>
       </select><br><br>
-
+      <div id = "create_bucket_elements">
+      <label for="bucket_name" id ="bucket_name_label">Bucket Name:</label>
+      <input type = "text" name = "bucketName" id ="bucket_name">
+      <br>
+      <br>
+      <label for="platform" id ="platform_label">Platform:</label>
+       <select name = "selectedPlatform" id="platform" onchange="createBucket();" required>
+        <option value="0">Pick a platform:</option>
+         {{range $index, $value := .Platforms}}
+            <option value="{{ $value }}">{{ $value }}</option>
+          {{end}}
+      </select>
+      <br>
+      <br>
+      </div>
        <input type="submit" value = "Upload" >
-   </form>
-    
+   </form>  
 </div>
 </body>
 </html>

@@ -34,6 +34,7 @@ var (
 	project_id           string   = "log-parser-278319"
 	region_id            string   = "ue"
 	app_specific_buckets []string = []string{"log-parser-278319.appspot.com", "staging.log-parser-278319.appspot.com", "us.artifacts.log-parser-278319.appspot.com", "platform_level_details"}
+	supported_platforms           = []string{"android", "ios"}
 ) //TODO: Put in a config file later
 var cloudConfigs map[string][]string = make(map[string][]string)
 var (
@@ -99,7 +100,15 @@ func fillUploadCfgPage(w http.ResponseWriter, r *http.Request) {
 	for k := range cloudConfigs {
 		bucketList = append(bucketList, k)
 	}
-	upload_configTempl.Execute(w, bucketList)
+	type BucketConfig struct {
+		BucketList []string
+		Platforms  []string
+	}
+	buckets_config := BucketConfig{
+		BucketList: bucketList,
+		Platforms:  supported_platforms,
+	}
+	upload_configTempl.Execute(w, buckets_config )
 }
 func loadLogLevel(w http.ResponseWriter, r *http.Request, platform string, rawlog string) {
 	r.ParseMultipartForm(10 << 20)

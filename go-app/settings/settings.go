@@ -29,9 +29,12 @@ func UploadConfigFile(r *http.Request, project_id string, cloudConfigs map[strin
 	if selectedBucket == "Create Bucket" {
 		selectedBucket = r.FormValue("bucketName")
 		bucket := client.Bucket(selectedBucket)
+		selectedPlatform := r.FormValue("selectedPlatform")
+		labels := map[string]string{"platform": selectedPlatform}
 		if err := bucket.Create(ctx, project_id, &storage.BucketAttrs{
 			StorageClass: "STANDARD",
 			Location:     "US",
+			Labels:       labels,
 		}); err != nil {
 			return cloudConfigs, err
 		}
