@@ -29,7 +29,7 @@ Apache header:
     
 ## Installation
 Download and install Vscode and golang
-Make sure to set up correctly your gopath
+<br>Make sure to set up correctly your gopath
 Install Google Cloud Sdk
 Clone the project and put it in the source folder of your go files
 Note that you cannot run the app locally because it is interacting with the cloud
