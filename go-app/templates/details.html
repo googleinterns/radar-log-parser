@@ -101,7 +101,7 @@ span{
   function expandContent(element){
      var expand_number ;
      if(element.innerHTML == "All"){
-      expand_number = Math.pow(2,53);
+      expand_number = Number.MAX_VALUE;
      }
      else{
       var expand_content = element.innerHTML;
@@ -161,7 +161,7 @@ span{
      if(banner_elem.parentNode.nextElementSibling == null){
         end = parseInt(banner_elem.getAttribute("data-full-size"))-1;
         merge = true;
-        if (expand_number != Math.pow(2,53) &&(line_number+expand_number-1<end)){
+        if (expand_number != Number.MAX_VALUE &&(line_number+expand_number-1<end)){
           end = line_number+expand_number-1;
           merge = false;
         }
@@ -169,7 +169,7 @@ span{
      else{
         concurrent_banner = banner_elem.parentNode.nextElementSibling.firstElementChild;
         var concur_line_number = parseInt(concurrent_banner.getAttribute("data-line-number"));
-        if (expand_number == Math.pow(2,53) || (line_number+expand_number>concur_line_number+1)){
+        if (expand_number == Number.MAX_VALUE || (line_number+expand_number>concur_line_number+1)){
           end = concur_line_number;
           merge = true;
         }
@@ -188,7 +188,7 @@ span{
      if(banner_elem.parentNode.previousElementSibling == null){
        start = 0;
        merge = true;
-       if (expand_number != Math.pow(2,53) && (line_number+expand_number+1>0)){
+       if (expand_number != Number.MAX_VALUE && (line_number+expand_number+1>0)){
          start = line_number+expand_number+1;
          merge = false;
        }
@@ -196,7 +196,7 @@ span{
      else{
        concurrent_banner = banner_elem.parentNode.previousElementSibling.lastElementChild;
        var concur_line_number = parseInt(concurrent_banner.getAttribute("data-line-number"));
-       if (expand_number == Math.pow(2,53) || (line_number+expand_number<concur_line_number-1)){
+       if (expand_number == Number.MAX_VALUE || (line_number+expand_number<concur_line_number-1)){
          start = concur_line_number;
          merge = true;
        }
