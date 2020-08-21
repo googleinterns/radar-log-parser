@@ -29,9 +29,12 @@ func UploadConfigFile(r *http.Request, project_id string, cloudConfigs map[strin
 	if selectedBucket == "Create Bucket" {
 		selectedBucket = r.FormValue("bucketName")
 		bucket := client.Bucket(selectedBucket)
+		selectedPlatform := r.FormValue("selectedPlatform")
+		labels := map[string]string{"platform": selectedPlatform}
 		if err := bucket.Create(ctx, project_id, &storage.BucketAttrs{
 			StorageClass: "STANDARD",
 			Location:     "US",
+			Labels:       labels,
 		}); err != nil {
 			return cloudConfigs, err
 		}
@@ -70,11 +73,12 @@ func DeleteConfig(r *http.Request, project_id string, region_id string, cloudCon
 	if err != nil {
 		return cloudConfigs, err
 	}
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
+	cfgfile := r.FormValue("selectedFile")
+
+	selectedBucket, found := doc.Find("option[value=" + cfgfile + "]").Parent().Attr("label")
 	if !found {
 		return cloudConfigs, err
 	}
-	cfgfile := r.FormValue("selectedFile")
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
@@ -146,7 +150,7 @@ func DisplayConfig(w http.ResponseWriter, r *http.Request, project_id string, re
 	if !found {
 		return "", "", "", err
 	}
-	content, err := utilities.DownloadFile(w, selectedBucket, cfgfile)
+	content, _, err := utilities.DownloadFile(w, selectedBucket, cfgfile)
 	if err != nil {
 		return "", "", "", err
 	}

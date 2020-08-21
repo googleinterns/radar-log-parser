@@ -37,8 +37,7 @@ body {
 
 
 .header-right {
- 
-  margin-left: 95%;
+  margin-left: 92%;
 }
 
 .uploadTab {
@@ -54,7 +53,7 @@ body {
   cursor: pointer;
   margin-left:127px;
 }
-#log_file_upload,#config_file_upload,#bucket,#log_level{
+#log_file_upload,#config_file_upload,#bucket,#log_level,#bucket_name_label,#platform_label{
  font-size: 20px;
 }
 #log_file ,#edit_config{

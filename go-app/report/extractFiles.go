@@ -14,14 +14,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func extractConfig(cfgName string, bucket string, cfgFile *Config) error {
-	cfg_data, err := utilities.DownloadFile(nil, bucket, cfgName)
+func extractConfig(cfgName string, bucket string, cfgFile *Config) (map[string]string, error) {
+	cfg_data, bucket_attrs, err := utilities.DownloadFile(nil, bucket, cfgName)
 	if err != nil {
-		return err
+		return bucket_attrs, err
 	}
 	cfg := &ConfigInterface{}
 	if err := yaml.Unmarshal(cfg_data, cfg); err != nil {
-		return err
+		return bucket_attrs, err
 	}
 	cfgFile.IssuesGeneralFields.Details = cfg.IssuesGeneralFields.Details
 	cfgFile.IssuesGeneralFields.Log_level = cfg.IssuesGeneralFields.Log_level
@@ -35,8 +35,23 @@ func extractConfig(cfgName string, bucket string, cfgFile *Config) error {
 	for issue_name, _ := range cfg.Issues {
 		cfgFile.Issues[issue_name] = extract_issues_content(cfg.Issues[issue_name])
 	}
+	return bucket_attrs, nil
+}
+func extractPlatformConfig(cfgName string, bucket string, platform_cfg *PlatformConfig) error {
+	cfg_data, _, err := utilities.DownloadFile(nil, bucket, cfgName)
+	if err != nil {
+		return err
+	}
+	cfg := &PlatformConfigInterface{}
+	if err := yaml.Unmarshal(cfg_data, cfg); err != nil {
+		return err
+	}
+	platform_cfg.LogLevels = cfg.LogLevels
+	platform_cfg.LevelLetter = cfg.LevelLetter
+	platform_cfg.LevelRegex = cfg.LevelRegex
 	return nil
 }
+
 func extract_issues_content(issue interface{}) Issue {
 	myIssues := Issue{}
 	myIssues.specific_process = make(map[string]string)
@@ -69,7 +84,7 @@ func extract_issues_content(issue interface{}) Issue {
 func uploadLogFile(w http.ResponseWriter, r *http.Request, project_id string, region_id string) (string, *string, string, string, error) {
 	r.ParseMultipartForm(10 << 20)
 	cfg_file := r.FormValue("selectedFile")
-	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/" + r.URL.Path)
+	res, err := http.Get("https://" + project_id + "." + region_id + "." + "r.appspot.com/")
 	if err != nil {
 		return "", nil, cfg_file, "", err
 	}
@@ -81,7 +96,7 @@ func uploadLogFile(w http.ResponseWriter, r *http.Request, project_id string, re
 	if err != nil {
 		return "", nil, cfg_file, "", err
 	}
-	selectedBucket, found := doc.Find("optgroup").Attr("label")
+	selectedBucket, found := doc.Find("optgroup").Attr("label") //TODO: This should be updated when the update group will be solved. This allow only to use config files of the first bucket that appears in the dropdown of analyse log page
 	if !found {
 		return "", nil, cfg_file, "", err
 	}
