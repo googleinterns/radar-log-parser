@@ -208,11 +208,11 @@ func getImportantEvents(cfgFile *Config, fContent string, importantEvents map[in
 			}
 			ev_content := ev_rgx_comp.FindAllString(fContent, -1)
 			if len(ev_content) > 0 {
-				mutex.Lock()
 				for _, match_ev := range ev_content {
+					mutex.Lock()
 					importantEvents[contentMap[match_ev]] = ev
+					mutex.Unlock()
 				}
-				mutex.Unlock()
 			}
 			waitGroup.Done()
 		}(ev, ev_rgx)
